@@ -24,6 +24,9 @@ export interface User {
   createdAt: string;
   lastSeenAt: string;
   bot?: boolean;
+  banned?: boolean;
+  bannedAt?: string;
+  tabViolations?: number;
 }
 
 export interface PublicUser {

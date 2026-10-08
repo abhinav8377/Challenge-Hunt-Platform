@@ -37,6 +37,7 @@ export async function GET() {
       score: u.score,
       solves: u.solved.length,
       bot: Boolean(u.bot),
+      banned: Boolean(u.banned),
       createdAt: u.createdAt,
       lastSeenAt: u.lastSeenAt,
     })),

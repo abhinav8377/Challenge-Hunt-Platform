@@ -24,6 +24,7 @@ interface OverviewUser {
   score: number;
   solves: number;
   bot: boolean;
+  banned: boolean;
   createdAt: string;
   lastSeenAt: string;
 }
@@ -240,7 +241,7 @@ export default function AdminPanel() {
     }
   }
 
-  async function userAction(id: string, action: "reset" | "toggle-role") {
+  async function userAction(id: string, action: "reset" | "toggle-role" | "unban") {
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         method: "PATCH",
@@ -252,7 +253,7 @@ export default function AdminPanel() {
         toast(data.error ?? "Action failed", "error");
         return;
       }
-      toast(action === "reset" ? "Score reset" : "Role updated");
+      toast(action === "reset" ? "Score reset" : action === "unban" ? "User unbanned" : "Role updated");
       refresh();
     } catch {
       toast("Network error", "error");
@@ -523,6 +524,11 @@ export default function AdminPanel() {
                             BOT
                           </span>
                         )}
+                        {u.banned && (
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/10 border border-rose-500/40 text-rose-400 font-mono text-[10px]">
+                            BANNED
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td className="py-3 px-5 font-mono text-xs text-cyan-400">{u.email}</td>
@@ -543,6 +549,15 @@ export default function AdminPanel() {
                       {new Date(u.lastSeenAt).toLocaleString()}
                     </td>
                     <td className="py-3 px-5 text-right whitespace-nowrap">
+                      {u.banned && (
+                        <button
+                          onClick={() => userAction(u.id, "unban")}
+                          className="text-gray-400 hover:text-emerald-300 px-1.5"
+                          title="Unban user"
+                        >
+                          <i className="fa-solid fa-unlock" />
+                        </button>
+                      )}
                       <button
                         onClick={() => userAction(u.id, "reset")}
                         className="text-gray-400 hover:text-amber-300 px-1.5"

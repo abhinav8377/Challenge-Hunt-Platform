@@ -53,6 +53,20 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
     return NextResponse.json({ ok: true, ...result });
   }
 
+  if (action === "unban") {
+    const result = await mutate((db) => {
+      const user = db.users.find((u) => u.id === id);
+      if (!user) return null;
+      user.banned = false;
+      user.tabViolations = 0;
+      user.bannedAt = undefined;
+      return user.username;
+    });
+    if (!result) return NextResponse.json({ error: "User not found." }, { status: 404 });
+    broadcast({ type: "users" });
+    return NextResponse.json({ ok: true, username: result });
+  }
+
   return NextResponse.json({ error: "Unknown action." }, { status: 400 });
 }
 

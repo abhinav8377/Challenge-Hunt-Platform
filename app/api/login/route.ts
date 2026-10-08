@@ -25,6 +25,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid credentials. Check your handle and password." }, { status: 401 });
   }
 
+  if (user.banned) {
+    return NextResponse.json({ error: "You are Banned. Contact the administrator to restore access." }, { status: 403 });
+  }
+
   await mutate((d) => {
     const fresh = d.users.find((u) => u.id === user.id);
     if (fresh) fresh.lastSeenAt = new Date().toISOString();

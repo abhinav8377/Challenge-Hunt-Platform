@@ -53,6 +53,7 @@ export async function getSessionUser(): Promise<PublicUser | null> {
 
   const user = db.users.find((u) => u.id === session.userId);
   if (!user) return null;
+  if (user.banned) return null;
 
   const stale = Date.now() - new Date(user.lastSeenAt).getTime() > TOUCH_INTERVAL_MS;
   if (stale) {
