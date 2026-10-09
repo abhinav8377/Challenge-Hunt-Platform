@@ -28,7 +28,7 @@ const SECTIONS = [
     rules: [
       "Scores update in real time across the platform the moment a pattern is verified.",
       "Ranks are ordered by total points, then by number of solves. Ties are broken alphabetically.",
-      "The leaderboard reflects every registered operative, including seeded arena legends. Administrators manage the platform and are not ranked.",
+      "The leaderboard reflects every registered operative. Administrators manage the platform and are not ranked.",
     ],
   },
   {

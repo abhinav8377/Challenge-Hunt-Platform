@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { getDB, mutate } from "@/lib/db";
+import { challengesCol, nowISO } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
-import { starterTemplates } from "@/lib/seed";
+import { starterTemplates } from "@/lib/templates";
 import { broadcast } from "@/lib/events";
 import { validateChallengeInput } from "@/lib/validate";
 import { availableRuntimes } from "@/lib/judge";
@@ -12,10 +12,14 @@ export async function GET() {
   const user = await getSessionUserRecord();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
-  const db = await getDB();
-  const runtimes = await availableRuntimes();
+  const challenges = await challengesCol();
+  const [list, runtimes] = await Promise.all([
+    challenges.find({}, { projection: { _id: 0 } }).sort({ createdAt: 1, _id: 1 }).toArray(),
+    availableRuntimes(),
+  ]);
+
   return NextResponse.json({
-    challenges: db.challenges,
+    challenges: list,
     solved: user.solved,
     role: user.role,
     runtimes,
@@ -42,12 +46,11 @@ export async function POST(req: NextRequest) {
     desc: parsed.value.desc,
     sampleOutput: parsed.value.sampleOutput,
     codeTemplates: { ...starterTemplates(), ...(parsed.value.codeTemplates ?? {}) },
-    createdAt: new Date().toISOString(),
+    createdAt: nowISO(),
   };
 
-  await mutate((d) => {
-    d.challenges.push(challenge);
-  });
+  await (await challengesCol()).insertOne(challenge);
+
   broadcast({ type: "challenges" });
   broadcast({ type: "stats" });
 

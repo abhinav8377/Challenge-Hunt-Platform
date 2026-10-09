@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { getDB, mutate, toPublicUser } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { CI, NO_ID, isDuplicateKey, nowISO, toPublicUser, usersCol } from "@/lib/db";
 import { attachSessionCookie, createSession } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
 import { broadcast } from "@/lib/events";
 import { broadcastLeaderboard } from "@/lib/leaderboard";
+import type { User } from "@/lib/types";
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -27,32 +28,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Password must be at least 6 characters." }, { status: 400 });
   }
 
-  const db = await getDB();
-  if (db.users.some((u) => u.username.toLowerCase() === username.toLowerCase())) {
+  const users = await usersCol();
+
+  const handleTaken = await users.findOne({ username }, { ...NO_ID, collation: CI });
+  if (handleTaken) {
     return NextResponse.json({ error: "This handle is already registered." }, { status: 409 });
   }
-  if (db.users.some((u) => u.email.toLowerCase() === email)) {
+  const emailTaken = await users.findOne({ email }, { ...NO_ID, collation: CI });
+  if (emailTaken) {
     return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
   }
 
   const { salt, hash } = hashPassword(password);
-  const now = new Date().toISOString();
-  const user = {
+  const now = nowISO();
+  const user: User = {
     id: `u-${randomUUID()}`,
     username,
     email,
     passwordHash: hash,
     salt,
-    role: "user" as const,
+    role: "user",
     score: 0,
-    solved: [] as string[],
+    solved: [],
     createdAt: now,
     lastSeenAt: now,
   };
 
-  await mutate((d) => {
-    d.users.push(user);
-  });
+  try {
+    await users.insertOne(user);
+  } catch (error) {
+    if (isDuplicateKey(error)) {
+      return NextResponse.json(
+        { error: "That handle or email is already registered." },
+        { status: 409 }
+      );
+    }
+    throw error;
+  }
 
   const token = await createSession(user.id);
   await attachSessionCookie(token);

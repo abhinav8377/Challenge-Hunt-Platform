@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSessionUserRecord } from "@/lib/auth";
-import { mutate } from "@/lib/db";
+import { nowISO, sessionsCol, usersCol } from "@/lib/db";
 import { broadcast } from "@/lib/events";
 
 const MAX_ATTEMPTS = 2;
@@ -17,37 +17,32 @@ export async function POST() {
     return NextResponse.json({ banned: true, message: "You are Banned" }, { status: 403 });
   }
 
-  const result = await mutate((db) => {
-    const fresh = db.users.find((u) => u.id === user.id);
-    if (!fresh) return null;
-    fresh.tabViolations = (fresh.tabViolations ?? 0) + 1;
-    const violations = fresh.tabViolations;
+  const users = await usersCol();
+  const fresh = await users.findOneAndUpdate(
+    { id: user.id },
+    { $inc: { tabViolations: 1 } },
+    { returnDocument: "after", projection: { id: 1, tabViolations: 1 } }
+  );
 
-    if (violations > MAX_ATTEMPTS) {
-      fresh.banned = true;
-      fresh.bannedAt = new Date().toISOString();
-      for (const [token, session] of Object.entries(db.sessions)) {
-        if (session.userId === fresh.id) delete db.sessions[token];
-      }
-      return { violations, banned: true as const };
-    }
-    return { violations, banned: false as const };
-  });
+  if (!fresh) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
-  if (!result) return NextResponse.json({ error: "User not found." }, { status: 404 });
+  const violations = fresh.tabViolations ?? 1;
 
-  if (result.banned) {
+  if (violations > MAX_ATTEMPTS) {
+    await users.updateOne({ id: user.id }, { $set: { banned: true, bannedAt: nowISO() } });
+    await (await sessionsCol()).deleteMany({ userId: user.id });
+
     broadcast({ type: "users" });
     broadcast({ type: "stats" });
     return NextResponse.json(
-      { banned: true, violations: result.violations, message: "You are Banned" },
+      { banned: true, violations, message: "You are Banned" },
       { status: 403 }
     );
   }
 
   return NextResponse.json({
     banned: false,
-    violations: result.violations,
-    leftAttempts: Math.max(0, MAX_ATTEMPTS - result.violations + 1),
+    violations,
+    leftAttempts: Math.max(0, MAX_ATTEMPTS - violations + 1),
   });
 }

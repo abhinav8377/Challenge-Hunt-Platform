@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mutate } from "@/lib/db";
+import { challengesCol, submissionsCol, usersCol } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
-import { starterTemplates } from "@/lib/seed";
+import { starterTemplates } from "@/lib/templates";
 import { broadcast } from "@/lib/events";
 import { validateChallengeInput } from "@/lib/validate";
 
@@ -27,28 +27,41 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
   const parsed = validateChallengeInput(body);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  const updated = await mutate((db) => {
-    const index = db.challenges.findIndex((c) => c.id === id);
-    if (index === -1) return null;
-    const existing = db.challenges[index];
-    db.challenges[index] = {
-      ...existing,
-      title: parsed.value.title,
-      category: parsed.value.category,
-      difficulty: parsed.value.difficulty,
-      points: parsed.value.points,
-      desc: parsed.value.desc,
-      sampleOutput: parsed.value.sampleOutput,
-      codeTemplates: {
-        ...starterTemplates(),
-        ...existing.codeTemplates,
-        ...(parsed.value.codeTemplates ?? {}),
-      },
-    };
-    return db.challenges[index];
-  });
+  const challenges = await challengesCol();
+  const existing = await challenges.findOne({ id }, { projection: { _id: 0 } });
+  if (!existing) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
 
-  if (!updated) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
+  const codeTemplates = {
+    ...starterTemplates(),
+    ...existing.codeTemplates,
+    ...(parsed.value.codeTemplates ?? {}),
+  };
+
+  const updated = {
+    ...existing,
+    title: parsed.value.title,
+    category: parsed.value.category,
+    difficulty: parsed.value.difficulty,
+    points: parsed.value.points,
+    desc: parsed.value.desc,
+    sampleOutput: parsed.value.sampleOutput,
+    codeTemplates,
+  };
+
+  await challenges.updateOne(
+    { id },
+    {
+      $set: {
+        title: updated.title,
+        category: updated.category,
+        difficulty: updated.difficulty,
+        points: updated.points,
+        desc: updated.desc,
+        sampleOutput: updated.sampleOutput,
+        codeTemplates,
+      },
+    }
+  );
 
   broadcast({ type: "challenges" });
   broadcast({ type: "stats" });
@@ -61,21 +74,29 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
 
   const { id } = await ctx.params;
 
-  const removed = await mutate((db) => {
-    const index = db.challenges.findIndex((c) => c.id === id);
-    if (index === -1) return null;
-    const [challenge] = db.challenges.splice(index, 1);
-    for (const user of db.users) {
-      if (user.solved.includes(id)) {
-        user.solved = user.solved.filter((s) => s !== id);
-        user.score = Math.max(0, user.score - challenge.points);
-      }
-    }
-    db.submissions = db.submissions.filter((s) => s.challengeId !== id);
-    return challenge;
-  });
-
+  const challenges = await challengesCol();
+  const removed = await challenges.findOneAndDelete({ id }, { projection: { _id: 0 } });
   if (!removed) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
+
+  await (await usersCol()).updateMany(
+    { solved: id },
+    [
+      {
+        $set: {
+          solved: {
+            $filter: {
+              input: { $ifNull: ["$solved", []] },
+              as: "solvedId",
+              cond: { $ne: ["$$solvedId", id] },
+            },
+          },
+          score: { $max: [0, { $subtract: [{ $ifNull: ["$score", 0] }, removed.points] }] },
+        },
+      },
+    ]
+  );
+
+  await (await submissionsCol()).deleteMany({ challengeId: id });
 
   broadcast({ type: "challenges" });
   broadcast({ type: "leaderboard" });

@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { getDB, mutate, toPublicUser } from "./db";
+import { NO_ID, sessionsCol, toPublicUser, usersCol } from "./db";
 import type { PublicUser, User } from "./types";
 
 export const SESSION_COOKIE = "htp_session";
@@ -9,21 +9,16 @@ const TOUCH_INTERVAL_MS = 60 * 1000;
 
 export async function createSession(userId: string): Promise<string> {
   const token = randomBytes(32).toString("hex");
-  await mutate((db) => {
-    db.sessions[token] = {
-      userId,
-      expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
-    };
-    pruneSessions(db);
-  });
-  return token;
-}
+  const sessions = await sessionsCol();
 
-function pruneSessions(db: { sessions: Record<string, { expiresAt: string }> }) {
-  const now = Date.now();
-  for (const [token, session] of Object.entries(db.sessions)) {
-    if (new Date(session.expiresAt).getTime() < now) delete db.sessions[token];
-  }
+  await sessions.insertOne({
+    _id: token,
+    userId,
+    expiresAt: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+  });
+  await sessions.deleteMany({ expiresAt: { $lt: new Date().toISOString() } });
+
+  return token;
 }
 
 export async function attachSessionCookie(token: string): Promise<void> {
@@ -41,45 +36,44 @@ export async function clearSessionCookie(): Promise<void> {
   cookieStore.delete(SESSION_COOKIE);
 }
 
-export async function getSessionUser(): Promise<PublicUser | null> {
+async function loadSessionUser(): Promise<User | null> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 
-  const db = await getDB();
-  const session = db.sessions[token];
+  const sessions = await sessionsCol();
+  const session = await sessions.findOne({ _id: token }, { projection: { userId: 1, expiresAt: 1 } });
   if (!session) return null;
   if (new Date(session.expiresAt).getTime() < Date.now()) return null;
 
-  const user = db.users.find((u) => u.id === session.userId);
+  const users = await usersCol();
+  const user = await users.findOne({ id: session.userId }, NO_ID);
   if (!user) return null;
   if (user.banned) return null;
 
-  const stale = Date.now() - new Date(user.lastSeenAt).getTime() > TOUCH_INTERVAL_MS;
-  if (stale) {
-    await mutate((d) => {
-      const fresh = d.users.find((u) => u.id === user.id);
-      if (fresh) fresh.lastSeenAt = new Date().toISOString();
-    });
+  if (Date.now() - new Date(user.lastSeenAt).getTime() > TOUCH_INTERVAL_MS) {
+    user.lastSeenAt = new Date().toISOString();
+    await users.updateOne({ id: user.id }, { $set: { lastSeenAt: user.lastSeenAt } });
   }
 
-  return toPublicUser(user);
+  return user;
+}
+
+export async function getSessionUser(): Promise<PublicUser | null> {
+  const user = await loadSessionUser();
+  return user ? toPublicUser(user) : null;
 }
 
 export async function getSessionUserRecord(): Promise<User | null> {
-  const publicUser = await getSessionUser();
-  if (!publicUser) return null;
-  const db = await getDB();
-  return db.users.find((u) => u.id === publicUser.id) ?? null;
+  return loadSessionUser();
 }
 
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
   if (token) {
-    await mutate((db) => {
-      delete db.sessions[token];
-    });
+    const sessions = await sessionsCol();
+    await sessions.deleteOne({ _id: token });
   }
   cookieStore.delete(SESSION_COOKIE);
 }

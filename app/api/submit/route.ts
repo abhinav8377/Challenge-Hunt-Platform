@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { getDB, mutate } from "@/lib/db";
+import { challengesCol, nowISO, submissionsCol, usersCol } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
 import { judgeCode } from "@/lib/judge";
 import { broadcast } from "@/lib/events";
@@ -8,6 +8,7 @@ import { broadcastLeaderboard } from "@/lib/leaderboard";
 import { LANGUAGES, type Language, type Submission } from "@/lib/types";
 
 const MAX_CODE_LENGTH = 50000;
+const MAX_STORED_SUBMISSIONS = 300;
 
 export async function POST(req: NextRequest) {
   const user = await getSessionUserRecord();
@@ -28,13 +29,27 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Solution exceeds ${MAX_CODE_LENGTH} characters.` }, { status: 400 });
   }
 
-  const db = await getDB();
-  const challenge = db.challenges.find((c) => c.id === challengeId);
+  const challenge = await (await challengesCol()).findOne({ id: challengeId }, { projection: { _id: 0 } });
   if (!challenge) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
 
   const result = await judgeCode(language, code, challenge.sampleOutput);
 
+  const users = await usersCol();
+  const alreadySolved = user.solved.includes(challenge.id);
   let earned = 0;
+
+  if (result.status === "passed" && !alreadySolved) {
+    const awarded = await users.updateOne(
+      { id: user.id, solved: { $ne: challenge.id } },
+      {
+        $push: { solved: challenge.id },
+        $inc: { score: challenge.points },
+        $set: { lastSeenAt: nowISO() },
+      }
+    );
+    if (awarded.matchedCount > 0) earned = challenge.points;
+  }
+
   const submission: Submission = {
     id: `s-${randomUUID()}`,
     userId: user.id,
@@ -43,28 +58,24 @@ export async function POST(req: NextRequest) {
     challengeTitle: challenge.title,
     language,
     status: result.status,
-    points: 0,
+    points: earned,
     durationMs: result.durationMs,
-    createdAt: new Date().toISOString(),
+    createdAt: nowISO(),
   };
 
-  const finalSolved = await mutate((d) => {
-    const fresh = d.users.find((u) => u.id === user.id);
-    if (!fresh) return [] as string[];
+  const submissions = await submissionsCol();
+  await submissions.insertOne(submission);
 
-    const alreadySolved = fresh.solved.includes(challenge.id);
-    if (result.status === "passed" && !alreadySolved) {
-      fresh.solved.push(challenge.id);
-      fresh.score += challenge.points;
-      fresh.lastSeenAt = new Date().toISOString();
-      earned = challenge.points;
-      submission.points = challenge.points;
-    }
+  const cutoff = await submissions
+    .find({}, { projection: { createdAt: 1 } })
+    .sort({ createdAt: -1, _id: -1 })
+    .skip(MAX_STORED_SUBMISSIONS - 1)
+    .limit(1)
+    .next();
+  if (cutoff) await submissions.deleteMany({ createdAt: { $lt: cutoff.createdAt } });
 
-    d.submissions.unshift(submission);
-    if (d.submissions.length > 300) d.submissions.length = 300;
-    return [...fresh.solved];
-  });
+  const fresh = await users.findOne({ id: user.id }, { projection: { solved: 1 } });
+  const solved = fresh ? [...fresh.solved] : [];
 
   if (result.status === "passed") broadcastLeaderboard();
   broadcast({ type: "submissions" });
@@ -74,6 +85,6 @@ export async function POST(req: NextRequest) {
     result,
     earned,
     alreadySolved: result.status === "passed" && earned === 0,
-    solved: finalSolved,
+    solved,
   });
 }

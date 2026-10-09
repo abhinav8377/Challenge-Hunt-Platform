@@ -65,18 +65,6 @@ export interface Submission {
   createdAt: string;
 }
 
-export interface Session {
-  userId: string;
-  expiresAt: string;
-}
-
-export interface DB {
-  users: User[];
-  challenges: Challenge[];
-  sessions: Record<string, Session>;
-  submissions: Submission[];
-}
-
 export type JudgeStatus =
   | "passed"
   | "failed"

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSessionUserRecord } from "@/lib/auth";
-import { getDB } from "@/lib/db";
+import { challengesCol } from "@/lib/db";
 import { getLeaderboardRows } from "@/lib/leaderboard";
 
 export const dynamic = "force-dynamic";
@@ -16,17 +16,22 @@ export default async function ProfilePage() {
   const user = await getSessionUserRecord();
   if (!user) redirect("/login?next=/profile");
 
-  const db = await getDB();
-  const rows = await getLeaderboardRows(user.id);
+  const [challenges, rows] = await Promise.all([
+    (await challengesCol())
+      .find({}, { projection: { _id: 0 } })
+      .sort({ createdAt: 1, _id: 1 })
+      .toArray(),
+    getLeaderboardRows(user.id),
+  ]);
   const myRank = user.role === "admin" ? null : (rows.find((row) => row.isSelf)?.rank ?? null);
-  const solvedChallenges = db.challenges.filter((c) => user.solved.includes(c.id));
-  const unsolvedChallenges = db.challenges.filter((c) => !user.solved.includes(c.id));
-  const completion = db.challenges.length ? Math.round((solvedChallenges.length / db.challenges.length) * 100) : 0;
+  const solvedChallenges = challenges.filter((c) => user.solved.includes(c.id));
+  const unsolvedChallenges = challenges.filter((c) => !user.solved.includes(c.id));
+  const completion = challenges.length ? Math.round((solvedChallenges.length / challenges.length) * 100) : 0;
 
   const stats = [
     { label: "Total Score", value: user.score.toLocaleString(), icon: "fa-solid fa-bolt" },
     { label: user.role === "admin" ? "Leaderboard" : "Global Rank", value: myRank ? `#${myRank}` : "—", icon: "fa-solid fa-ranking-star" },
-    { label: "Patterns Solved", value: `${solvedChallenges.length}/${db.challenges.length}`, icon: "fa-solid fa-check-double" },
+    { label: "Patterns Solved", value: `${solvedChallenges.length}/${challenges.length}`, icon: "fa-solid fa-check-double" },
     { label: "Completion", value: `${completion}%`, icon: "fa-solid fa-chart-pie" },
   ];
 

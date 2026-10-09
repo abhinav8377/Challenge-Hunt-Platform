@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDB, mutate, toPublicUser } from "@/lib/db";
+import { CI, NO_ID, nowISO, toPublicUser, usersCol } from "@/lib/db";
 import { attachSessionCookie, createSession } from "@/lib/auth";
 import { verifyPassword } from "@/lib/password";
 
@@ -14,11 +14,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Handle/email and password are required." }, { status: 400 });
   }
 
-  const db = await getDB();
-  const user = db.users.find(
-    (u) =>
-      u.username.toLowerCase() === identifier.toLowerCase() ||
-      u.email.toLowerCase() === identifier.toLowerCase()
+  const users = await usersCol();
+  const user = await users.findOne(
+    { $or: [{ username: identifier }, { email: identifier }] },
+    { ...NO_ID, collation: CI }
   );
 
   if (!user || !verifyPassword(password, user.salt, user.passwordHash)) {
@@ -29,10 +28,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "You are Banned. Contact the administrator to restore access." }, { status: 403 });
   }
 
-  await mutate((d) => {
-    const fresh = d.users.find((u) => u.id === user.id);
-    if (fresh) fresh.lastSeenAt = new Date().toISOString();
-  });
+  user.lastSeenAt = nowISO();
+  await users.updateOne({ id: user.id }, { $set: { lastSeenAt: user.lastSeenAt } });
 
   const token = await createSession(user.id);
   await attachSessionCookie(token);

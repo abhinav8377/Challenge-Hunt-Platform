@@ -1,0 +1,116 @@
+import { randomUUID } from "node:crypto";
+import type { CollationOptions, Db, MongoClient } from "mongodb";
+import { MongoClient as MongoClientCtor } from "mongodb";
+import { hashPassword } from "./password";
+import type { User } from "./types";
+
+const DEFAULT_DB_NAME = "hack_the_pattern";
+
+export const CI: CollationOptions = { locale: "en", strength: 2 };
+
+const globalStore = globalThis as unknown as {
+  __htpMongoClient?: Promise<MongoClient>;
+  __htpMongoInit?: Promise<void>;
+};
+
+function connectionString(): string {
+  const uri = process.env.MONGODB_URI?.trim();
+  if (!uri) {
+    throw new Error(
+      "MONGODB_URI is not configured. Add your MongoDB Atlas connection string to .env.local."
+    );
+  }
+  return uri;
+}
+
+export function mongoClient(): Promise<MongoClient> {
+  if (!globalStore.__htpMongoClient) {
+    const pending = new MongoClientCtor(connectionString(), {
+      maxPoolSize: 10,
+      retryWrites: true,
+    }).connect();
+    globalStore.__htpMongoClient = pending.catch((error) => {
+      globalStore.__htpMongoClient = undefined;
+      throw error;
+    });
+  }
+  return globalStore.__htpMongoClient;
+}
+
+export async function getDatabase(): Promise<Db> {
+  const client = await mongoClient();
+  const db = client.db(process.env.MONGODB_DB_NAME?.trim() || DEFAULT_DB_NAME);
+
+  if (!globalStore.__htpMongoInit) {
+    globalStore.__htpMongoInit = initialize(db).catch((error) => {
+      globalStore.__htpMongoInit = undefined;
+      throw error;
+    });
+  }
+  await globalStore.__htpMongoInit;
+
+  return db;
+}
+
+async function initialize(db: Db): Promise<void> {
+  const users = db.collection<User>("users");
+  const challenges = db.collection("challenges");
+  const sessions = db.collection("sessions");
+  const submissions = db.collection("submissions");
+
+  await Promise.all([
+    users.createIndex({ id: 1 }, { unique: true }),
+    users.createIndex({ username: 1 }, { unique: true, collation: CI }),
+    users.createIndex({ email: 1 }, { unique: true, collation: CI }),
+    users.createIndex({ score: -1 }),
+    challenges.createIndex({ id: 1 }, { unique: true }),
+    challenges.createIndex({ createdAt: 1, _id: 1 }),
+    sessions.createIndex({ userId: 1 }),
+    sessions.createIndex({ expiresAt: 1 }),
+    submissions.createIndex({ createdAt: -1 }),
+    submissions.createIndex({ userId: 1 }),
+    submissions.createIndex({ challengeId: 1 }),
+  ]);
+
+  await ensureAdmin(db);
+}
+
+async function ensureAdmin(db: Db): Promise<void> {
+  const username = process.env.ADMIN_USERNAME?.trim();
+  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD;
+
+  if (!username || !email || !password) return;
+
+  const users = db.collection<User>("users");
+  const now = new Date().toISOString();
+
+  const existing = await users.findOne({ $or: [{ username }, { email }] }, { collation: CI });
+  if (existing) {
+    if (existing.role !== "admin") {
+      await users.updateOne({ id: existing.id }, { $set: { role: "admin" } });
+    }
+    return;
+  }
+
+  const { salt, hash } = hashPassword(password);
+  const admin: User = {
+    id: `u-${randomUUID()}`,
+    username,
+    email,
+    passwordHash: hash,
+    salt,
+    role: "admin",
+    score: 0,
+    solved: [],
+    createdAt: now,
+    lastSeenAt: now,
+  };
+
+  try {
+    await users.insertOne(admin);
+  } catch (error) {
+    const duplicate = typeof error === "object" && error !== null && "code" in error && error.code === 11000;
+    if (!duplicate) throw error;
+  }
+}
