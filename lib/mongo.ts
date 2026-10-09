@@ -57,12 +57,14 @@ async function initialize(db: Db): Promise<void> {
   const challenges = db.collection("challenges");
   const sessions = db.collection("sessions");
   const submissions = db.collection("submissions");
+  const teams = db.collection("teams");
 
   await Promise.all([
     users.createIndex({ id: 1 }, { unique: true }),
     users.createIndex({ username: 1 }, { unique: true, collation: CI }),
     users.createIndex({ email: 1 }, { unique: true, collation: CI }),
     users.createIndex({ score: -1 }),
+    users.createIndex({ teamId: 1 }),
     challenges.createIndex({ id: 1 }, { unique: true }),
     challenges.createIndex({ createdAt: 1, _id: 1 }),
     sessions.createIndex({ userId: 1 }),
@@ -70,6 +72,9 @@ async function initialize(db: Db): Promise<void> {
     submissions.createIndex({ createdAt: -1 }),
     submissions.createIndex({ userId: 1 }),
     submissions.createIndex({ challengeId: 1 }),
+    teams.createIndex({ id: 1 }, { unique: true }),
+    teams.createIndex({ name: 1 }, { unique: true, collation: CI }),
+    teams.createIndex({ slug: 1 }, { unique: true, collation: CI }),
   ]);
 
   await ensureAdmin(db);

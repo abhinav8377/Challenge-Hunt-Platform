@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid credentials. Check your handle and password." }, { status: 401 });
   }
 
-  if (user.banned) {
+  if (user.banned && user.role !== "admin") {
     return NextResponse.json({ error: "You are Banned. Contact the administrator to restore access." }, { status: 403 });
   }
 

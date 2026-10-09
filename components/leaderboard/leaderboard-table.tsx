@@ -134,12 +134,12 @@ export default function LeaderboardTable({
                       No teams match &quot;{search}&quot;.
                     </>
                   ) : (
-                    <>No operatives on the board yet.</>
+                    <>No teams on the board yet.</>
                   )}
                 </td>
               </tr>
             )}
-            {loaded && rows.map((row) => <LeaderboardRowComponent key={row.username} row={row} />)}
+            {loaded && rows.map((row) => <LeaderboardRowComponent key={row.teamSlug} row={row} />)}
           </tbody>
         </table>
       </div>

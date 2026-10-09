@@ -31,13 +31,13 @@ export default function LeaderboardRow({ row }: { row: LeaderboardRow }) {
       </td>
       <td className="py-3.5 px-4 sm:px-5">
         <div className="flex items-center gap-3 min-w-0">
-          <TeamAvatar username={row.username} size="sm" />
+          <TeamAvatar username={row.teamName} size="sm" />
           <span className="font-rajdhani font-bold text-white text-sm truncate max-w-[10rem] sm:max-w-none">
-            {row.username}
+            {row.teamName}
             {row.isSelf && (
               <span className="ms-2 inline-flex items-center gap-1 text-[10px] font-mono text-yellow-300 align-middle">
                 <i className="fa-solid fa-crown" aria-hidden="true" />
-                (You)
+                (Your Team)
               </span>
             )}
           </span>

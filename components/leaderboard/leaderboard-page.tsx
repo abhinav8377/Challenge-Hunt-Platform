@@ -48,7 +48,7 @@ export default function LeaderboardPage() {
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const filtered = query ? rows.filter((row) => row.username.toLowerCase().includes(query)) : [...rows];
+    const filtered = query ? rows.filter((row) => row.teamName.toLowerCase().includes(query)) : [...rows];
     filtered.sort((a, b) => {
       let cmp = 0;
       if (sortKey === "rank") cmp = a.rank - b.rank;

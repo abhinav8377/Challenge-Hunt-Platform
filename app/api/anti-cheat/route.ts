@@ -10,7 +10,7 @@ export async function POST() {
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
   if (user.role === "admin") {
-    return NextResponse.json({ banned: false, ignored: true, leftAttempts: MAX_ATTEMPTS });
+    return NextResponse.json({ banned: false, ignored: true });
   }
 
   if (user.banned) {
@@ -21,15 +21,22 @@ export async function POST() {
   const fresh = await users.findOneAndUpdate(
     { id: user.id },
     { $inc: { tabViolations: 1 } },
-    { returnDocument: "after", projection: { id: 1, tabViolations: 1 } }
+    { returnDocument: "after", projection: { id: 1, role: 1, tabViolations: 1 } }
   );
 
   if (!fresh) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
+  if (fresh.role === "admin") {
+    return NextResponse.json({ banned: false, ignored: true, leftAttempts: MAX_ATTEMPTS });
+  }
+
   const violations = fresh.tabViolations ?? 1;
 
   if (violations > MAX_ATTEMPTS) {
-    await users.updateOne({ id: user.id }, { $set: { banned: true, bannedAt: nowISO() } });
+    await users.updateOne(
+      { id: user.id, role: { $ne: "admin" } },
+      { $set: { banned: true, bannedAt: nowISO() } }
+    );
     await (await sessionsCol()).deleteMany({ userId: user.id });
 
     broadcast({ type: "users" });

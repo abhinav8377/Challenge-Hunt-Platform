@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { challengesCol, nowISO, submissionsCol, usersCol } from "@/lib/db";
+import { challengesCol, NO_ID, nowISO, submissionsCol, teamsCol, usersCol } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
 import { judgeCode } from "@/lib/judge";
 import { broadcast } from "@/lib/events";
@@ -35,19 +35,41 @@ export async function POST(req: NextRequest) {
   const result = await judgeCode(language, code, challenge.sampleOutput);
 
   const users = await usersCol();
-  const alreadySolved = user.solved.includes(challenge.id);
+  const teams = await teamsCol();
+  const fresh = await users.findOne({ id: user.id }, NO_ID);
+  const team = fresh?.teamId ? await teams.findOne({ id: fresh.teamId }, NO_ID) : null;
+
   let earned = 0;
 
-  if (result.status === "passed" && !alreadySolved) {
-    const awarded = await users.updateOne(
-      { id: user.id, solved: { $ne: challenge.id } },
-      {
-        $push: { solved: challenge.id },
-        $inc: { score: challenge.points },
-        $set: { lastSeenAt: nowISO() },
+  if (result.status === "passed") {
+    if (team) {
+      // Points are awarded once per team — no duplicate scores across members.
+      const awarded = await teams.updateOne(
+        { id: team.id, solved: { $ne: challenge.id } },
+        { $push: { solved: challenge.id }, $inc: { score: challenge.points } }
+      );
+      if (awarded.matchedCount > 0) {
+        earned = challenge.points;
+        await users.updateOne(
+          { id: user.id, solved: { $ne: challenge.id } },
+          {
+            $push: { solved: challenge.id },
+            $inc: { score: challenge.points },
+            $set: { lastSeenAt: nowISO() },
+          }
+        );
       }
-    );
-    if (awarded.matchedCount > 0) earned = challenge.points;
+    } else {
+      const awarded = await users.updateOne(
+        { id: user.id, solved: { $ne: challenge.id } },
+        {
+          $push: { solved: challenge.id },
+          $inc: { score: challenge.points },
+          $set: { lastSeenAt: nowISO() },
+        }
+      );
+      if (awarded.matchedCount > 0) earned = challenge.points;
+    }
   }
 
   const submission: Submission = {
@@ -74,8 +96,9 @@ export async function POST(req: NextRequest) {
     .next();
   if (cutoff) await submissions.deleteMany({ createdAt: { $lt: cutoff.createdAt } });
 
-  const fresh = await users.findOne({ id: user.id }, { projection: { solved: 1 } });
-  const solved = fresh ? [...fresh.solved] : [];
+  const solved = team
+    ? ((await teams.findOne({ id: team.id }, { projection: { _id: 0, solved: 1 } }))?.solved ?? [])
+    : ((await users.findOne({ id: user.id }, { projection: { _id: 0, solved: 1 } }))?.solved ?? []);
 
   if (result.status === "passed") broadcastLeaderboard();
   broadcast({ type: "submissions" });
@@ -85,6 +108,7 @@ export async function POST(req: NextRequest) {
     result,
     earned,
     alreadySolved: result.status === "passed" && earned === 0,
+    team: team ? { name: team.name } : null,
     solved,
   });
 }

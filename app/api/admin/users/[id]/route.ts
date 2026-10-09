@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sessionsCol, usersCol } from "@/lib/db";
+import { sessionsCol, teamsCol, usersCol } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
 import { broadcast } from "@/lib/events";
 import { broadcastLeaderboard } from "@/lib/leaderboard";
@@ -76,10 +76,26 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   }
 
   const users = await usersCol();
-  const removed = await users.findOneAndDelete({ id }, { projection: { username: 1 } });
+  const removed = await users.findOneAndDelete({ id }, { projection: { username: 1, teamId: 1 } });
   if (!removed) return NextResponse.json({ error: "User not found." }, { status: 404 });
 
   await (await sessionsCol()).deleteMany({ userId: id });
+
+  if (removed.teamId) {
+    const teams = await teamsCol();
+    const team = await teams.findOne({ id: removed.teamId });
+    if (team) {
+      const memberIds = team.memberIds.filter((memberId) => memberId !== id);
+      if (memberIds.length === 0) {
+        await teams.deleteOne({ id: team.id });
+      } else {
+        await teams.updateOne(
+          { id: team.id },
+          { $set: { memberIds, leaderId: team.leaderId === id ? memberIds[0] : team.leaderId } }
+        );
+      }
+    }
+  }
 
   broadcast({ type: "users" });
   broadcastLeaderboard();

@@ -49,17 +49,17 @@ export function ToastHost() {
   const list = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   return (
-    <div className="fixed bottom-6 right-6 z-[60] flex flex-col items-end gap-2 pointer-events-none">
+    <div className="fixed top-4 right-4 sm:top-6 sm:right-6 z-[60] flex flex-col items-end gap-2 pointer-events-none max-w-[calc(100vw-2rem)]">
       {list.map((t) => (
         <div
           key={t.id}
-          className="glass-panel px-5 py-3 rounded-xl border border-cyan-400 shadow-neon-cyan flex items-center gap-3 animate-[slideIn_0.3s_ease-out]"
+          className="glass-panel px-5 py-3 rounded-xl border border-cyan-400 shadow-neon-cyan flex items-center gap-3 animate-[slideDown_0.3s_ease-out]"
         >
           <i className={`${ICONS[t.kind]} text-lg`} />
           <span className="font-rajdhani font-bold text-sm text-white">{t.message}</span>
         </div>
       ))}
-      <style>{`@keyframes slideIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }`}</style>
+      <style>{`@keyframes slideDown { from { opacity: 0; transform: translateY(-16px); } to { opacity: 1; transform: translateY(0); } }`}</style>
     </div>
   );
 }

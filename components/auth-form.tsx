@@ -99,7 +99,7 @@ export default function AuthForm({ mode, next, notice }: AuthFormProps) {
           {isRegister ? (
             <>
               <div className="space-y-1">
-                <label className="block font-mono text-xs text-cyan-400">Hacker Handle / Operative Name</label>
+                <label className="block font-mono text-xs text-cyan-400">Hacker Handle / User Name</label>
                 <input
                   type="text"
                   required
@@ -116,7 +116,7 @@ export default function AuthForm({ mode, next, notice }: AuthFormProps) {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="operative@tekqbe.io"
+                  placeholder="user@tekqbe.io"
                   className="w-full bg-brand-navy border border-cyan-500/30 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
                 />
               </div>
@@ -129,7 +129,7 @@ export default function AuthForm({ mode, next, notice }: AuthFormProps) {
                 required
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
-                placeholder="operative@tekqbe.io"
+                placeholder="user@tekqbe.io"
                 className="w-full bg-brand-navy border border-cyan-500/30 rounded-lg px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-400"
               />
             </div>
@@ -164,7 +164,7 @@ export default function AuthForm({ mode, next, notice }: AuthFormProps) {
           <div className="pt-1 text-center font-mono text-xs text-gray-500">
             {switchHref ? (
               <Link href={switchHref} className="text-cyan-400 hover:text-brand-neon-cyan underline">
-                {isRegister ? "Already registered? Sign in" : "New operative? Create an account"}
+                {isRegister ? "Already registered? Sign in" : "New user? Create an account"}
               </Link>
             ) : null}
           </div>

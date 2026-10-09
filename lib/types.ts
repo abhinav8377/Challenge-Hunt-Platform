@@ -27,6 +27,18 @@ export interface User {
   banned?: boolean;
   bannedAt?: string;
   tabViolations?: number;
+  teamId?: string;
+}
+
+export interface Team {
+  id: string;
+  name: string;
+  slug: string;
+  leaderId: string;
+  memberIds: string[];
+  solved: string[];
+  score: number;
+  createdAt: string;
 }
 
 export interface PublicUser {
@@ -84,7 +96,9 @@ export interface JudgeResult {
 
 export interface LeaderboardRow {
   rank: number;
-  username: string;
+  teamName: string;
+  teamSlug: string;
+  members: string[];
   score: number;
   solves: number;
   status: "Online" | "Offline";

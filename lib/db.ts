@@ -1,6 +1,6 @@
 import type { Collection } from "mongodb";
 import { getDatabase } from "./mongo";
-import type { Challenge, Submission, User } from "./types";
+import type { Challenge, Submission, Team, User } from "./types";
 
 export { CI } from "./mongo";
 
@@ -16,6 +16,10 @@ export async function usersCol(): Promise<Collection<User>> {
 
 export async function challengesCol(): Promise<Collection<Challenge>> {
   return (await getDatabase()).collection<Challenge>("challenges");
+}
+
+export async function teamsCol(): Promise<Collection<Team>> {
+  return (await getDatabase()).collection<Team>("teams");
 }
 
 export async function sessionsCol(): Promise<Collection<SessionDoc>> {

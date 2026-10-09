@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
-import { challengesCol, nowISO } from "@/lib/db";
+import { challengesCol, nowISO, teamsCol } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
 import { starterTemplates } from "@/lib/templates";
 import { broadcast } from "@/lib/events";
@@ -13,14 +13,17 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
 
   const challenges = await challengesCol();
-  const [list, runtimes] = await Promise.all([
+  const [list, runtimes, team] = await Promise.all([
     challenges.find({}, { projection: { _id: 0 } }).sort({ createdAt: 1, _id: 1 }).toArray(),
     availableRuntimes(),
+    user.teamId
+      ? (await teamsCol()).findOne({ id: user.teamId }, { projection: { _id: 0, solved: 1 } })
+      : Promise.resolve(null),
   ]);
 
   return NextResponse.json({
     challenges: list,
-    solved: user.solved,
+    solved: team ? team.solved : user.solved,
     role: user.role,
     runtimes,
   });

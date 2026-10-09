@@ -10,7 +10,7 @@ export default async function AdminPage() {
   if (user.role !== "admin") redirect("/profile");
 
   return (
-    <main className="w-full max-w-7xl mx-auto px-4 lg:px-8 py-8">
+    <main className="w-full max-w-[1400px] mx-auto px-4 lg:px-6 py-8">
       <AdminPanel />
     </main>
   );

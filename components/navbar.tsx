@@ -19,11 +19,19 @@ export default function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const accountRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
     const load = () => {
-      fetch("/api/me")
+      fetch("/api/me", { cache: "no-store" })
         .then((r) => r.json())
         .then((d) => setUser(d.user ?? null))
         .catch(() => setUser(null))
@@ -32,7 +40,7 @@ export default function Navbar() {
     load();
     window.addEventListener("htp-auth", load);
     return () => window.removeEventListener("htp-auth", load);
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     const onOpen = () => setOverlayOpen(true);
@@ -68,7 +76,11 @@ export default function Navbar() {
   if (overlayOpen) return null;
 
   return (
-    <nav className="sticky top-0 z-40 bg-transparent border-b border-cyan-500/10 px-4 lg:px-8 py-3">
+    <nav
+      className={`sticky top-0 z-40 border-b border-cyan-500/10 px-4 lg:px-8 py-3 transition-colors duration-300 ${
+        scrolled ? "bg-[#04101d]/70 backdrop-blur-md" : "bg-transparent"
+      }`}
+    >
       <div className="max-w-7xl mx-auto flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="relative w-10 h-10 flex items-center justify-center transition-transform duration-300 group-hover:scale-110">
@@ -84,7 +96,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {user && (
+        {user && pathname !== "/admin" && (
           <div className="hidden md:flex items-center gap-6 lg:gap-8 font-rajdhani text-sm font-semibold tracking-wide">
             {NAV_LINKS.map((link) => {
               const active = pathname === link.href;
@@ -204,6 +216,7 @@ export default function Navbar() {
       {menuOpen && (
         <div className="md:hidden mt-3 rounded-xl bg-brand-deep/95 backdrop-blur-md border border-cyan-500/20 p-4 flex flex-col gap-1 font-rajdhani text-base font-semibold">
           {user &&
+            pathname !== "/admin" &&
             NAV_LINKS.map((link) => (
               <Link
                 key={link.href}

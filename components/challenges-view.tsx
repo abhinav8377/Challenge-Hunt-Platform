@@ -20,9 +20,10 @@ function templateFor(challenge: Challenge | null, language: Language): string {
 }
 
 interface ChallengesViewProps {
-  user: PublicUser;
+  user: PublicUser | null;
   initialChallenges: Challenge[];
   initialSolved: string[];
+  compact?: boolean;
 }
 
 type ConsoleKind = "info" | "ok" | "fail" | "warn" | "plain";
@@ -48,7 +49,7 @@ const DIFF_STYLES: Record<string, string> = {
 
 let lineSeq = 0;
 
-export default function ChallengesView({ user, initialChallenges, initialSolved }: ChallengesViewProps) {
+export default function ChallengesView({ user, initialChallenges, initialSolved, compact = false }: ChallengesViewProps) {
   const [challenges, setChallenges] = useState<Challenge[]>(initialChallenges);
   const [solved, setSolved] = useState<string[]>(initialSolved);
   const [filter, setFilter] = useState<"all" | (typeof CATEGORIES)[number]>("all");
@@ -143,10 +144,11 @@ export default function ChallengesView({ user, initialChallenges, initialSolved 
         if (res.status === 401) return;
         const data = await res.json().catch(() => ({}));
         if (data.banned) {
+          toast(data.message ?? "You are Banned", "error");
           startBanCountdown();
           return;
         }
-        if (typeof data.leftAttempts === "number") {
+        if (typeof data.leftAttempts === "number" && !data.ignored) {
           toast(`Unusual Detection! Left attempts: ${data.leftAttempts}`, "error");
         }
       } catch {
@@ -252,13 +254,19 @@ export default function ChallengesView({ user, initialChallenges, initialSolved 
         pushLine("ok", `[✓] TEST PASSED! ${result.message}`);
         pushLine("plain", `[engine] runtime=${runtimeLabel} · ${result.durationMs}ms`);
         pushLine("plain", result.output || "(empty output)");
+        const teamName = data.team?.name;
         if (data.earned > 0) {
-          pushLine("ok", `[Score] +${data.earned} PTS awarded to ${user.username}`);
-          toast(`Passed! +${data.earned} PTS added`);
+          if (teamName) {
+            pushLine("ok", `[Score] +${data.earned} PTS awarded to Team ${teamName}`);
+            toast(`Passed! +${data.earned} PTS · Team ${teamName}`);
+          } else {
+            pushLine("ok", `[Score] +${data.earned} PTS awarded to ${user?.username ?? "you"}`);
+            toast(`Passed! +${data.earned} PTS added`);
+          }
           setSolved(data.solved);
         } else {
-          pushLine("info", "[Score] Already solved — no additional points awarded.");
-          toast("Pattern verified — already solved", "info");
+          pushLine("info", teamName ? "[Score] Already solved — team already earned these points." : "[Score] Already solved — no additional points awarded.");
+          toast(teamName ? `Already solved by Team ${teamName}` : "Pattern verified — already solved", "info");
           setSolved(data.solved);
         }
       } else if (result.status === "failed") {
@@ -287,39 +295,57 @@ export default function ChallengesView({ user, initialChallenges, initialSolved 
     }
   }
 
-  return (
-    <div className="space-y-8 pb-8">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-cyan-500/20 pb-4">
-        <div>
-          <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs uppercase tracking-widest">
-            <i className="fa-solid fa-layer-group" /> Active Quests · {solved.length}/{challenges.length} solved
-          </div>
-          <h1 className="font-orbitron text-3xl md:text-4xl font-extrabold text-white mt-1">
-            PATTERN <span className="text-brand-neon-cyan">CHALLENGES</span>
-          </h1>
-        </div>
+  const filterChips = (
+    <div className="flex flex-wrap items-center gap-2 font-rajdhani font-semibold text-sm">
+      {(["all", ...CATEGORIES] as const).map((cat) => (
+        <button
+          key={cat}
+          onClick={() => setFilter(cat)}
+          className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
+            filter === cat ? "bg-cyan-500 text-black" : "glass-panel text-gray-300 hover:text-cyan-300"
+          }`}
+        >
+          {cat === "all" ? "All" : cat}
+        </button>
+      ))}
+    </div>
+  );
 
-        <div className="flex flex-wrap items-center gap-2 font-rajdhani font-semibold text-sm">
-          {(["all", ...CATEGORIES] as const).map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
-                filter === cat ? "bg-cyan-500 text-black" : "glass-panel text-gray-300 hover:text-cyan-300"
-              }`}
-            >
-              {cat === "all" ? "All" : cat}
-            </button>
-          ))}
+  return (
+    <div className={compact ? "space-y-5" : "space-y-8 pb-8"}>
+      {compact ? (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-orbitron font-bold text-sm sm:text-base text-white uppercase tracking-wide">
+              <i className="fa-solid fa-trophy text-cyan-400 mr-2" aria-hidden="true" />
+              Arena Challenges
+            </h3>
+            <p className="font-mono text-[11px] text-cyan-500/60 mt-1">
+              Active Quests · {solved.length}/{challenges.length} solved
+            </p>
+          </div>
+          {filterChips}
         </div>
-      </div>
+      ) : (
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-cyan-500/20 pb-4">
+          <div>
+            <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs uppercase tracking-widest">
+              <i className="fa-solid fa-layer-group" /> Active Quests · {solved.length}/{challenges.length} solved
+            </div>
+            <h1 className="font-orbitron text-3xl md:text-4xl font-extrabold text-white mt-1">
+              PATTERN <span className="text-brand-neon-cyan">CHALLENGES</span>
+            </h1>
+          </div>
+          {filterChips}
+        </div>
+      )}
 
       {filtered.length === 0 ? (
         <div className="glass-panel rounded-2xl border border-cyan-500/20 p-12 text-center font-mono text-sm text-gray-500">
           No challenges in this category yet.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className={`grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 ${compact ? "gap-4" : "gap-6"}`}>
           {filtered.map((challenge) => {
             const isSolved = solved.includes(challenge.id);
             return (

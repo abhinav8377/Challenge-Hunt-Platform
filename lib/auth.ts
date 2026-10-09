@@ -49,7 +49,7 @@ async function loadSessionUser(): Promise<User | null> {
   const users = await usersCol();
   const user = await users.findOne({ id: session.userId }, NO_ID);
   if (!user) return null;
-  if (user.banned) return null;
+  if (user.banned && user.role !== "admin") return null;
 
   if (Date.now() - new Date(user.lastSeenAt).getTime() > TOUCH_INTERVAL_MS) {
     user.lastSeenAt = new Date().toISOString();
@@ -71,9 +71,18 @@ export async function getSessionUserRecord(): Promise<User | null> {
 export async function destroySession(): Promise<void> {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE)?.value;
+
   if (token) {
     const sessions = await sessionsCol();
     await sessions.deleteOne({ _id: token });
   }
-  cookieStore.delete(SESSION_COOKIE);
+
+  // Clear the cookie with the exact attributes it was set with so nothing survives.
+  cookieStore.set(SESSION_COOKIE, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 0,
+    expires: new Date(0),
+  });
 }

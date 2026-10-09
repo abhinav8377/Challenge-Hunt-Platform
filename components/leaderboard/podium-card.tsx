@@ -21,16 +21,16 @@ export default function PodiumCard({ row, variant, className = "" }: PodiumCardP
     >
       <RankMedal rank={row.rank} />
       <div className={`${first ? "mt-3" : "mt-2.5"}`}>
-        <TeamAvatar username={row.username} size={first ? "lg" : "md"} />
+        <TeamAvatar username={row.teamName} size={first ? "lg" : "md"} />
       </div>
 
       <h3
         className={`font-orbitron font-bold text-white mt-3 w-full truncate ${
           first ? "text-xl" : "text-sm sm:text-base"
         }`}
-        title={row.username}
+        title={row.teamName}
       >
-        {row.username}
+        {row.teamName}
       </h3>
       <p className="text-[#58E85B] font-rajdhani text-xs sm:text-sm font-semibold uppercase tracking-wider mt-0.5">
         {row.group}
