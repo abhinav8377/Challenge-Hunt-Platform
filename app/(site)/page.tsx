@@ -38,7 +38,7 @@ export default async function HomePage() {
                 HACK THE PATTERN
               </h1>
               <p className="font-rajdhani text-lg sm:text-xl text-cyan-100/80 max-w-2xl mx-auto font-medium tracking-wide">
-                Write algorithms, compile pattern matrices, execute test cases, and claim your place on the live hacker
+                Writeeeeeeeeeeeeeeee algorithms, compile pattern matrices, execute test cases, and claim your place on the live hacker
                 leaderboard.
               </p>
             </div>
