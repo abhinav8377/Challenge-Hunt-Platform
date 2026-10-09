@@ -1,14 +1,14 @@
 export type Role = "admin" | "user";
 export type Category = "Matrix" | "Pyramid" | "Numerical";
 export type Difficulty = "Easy" | "Medium" | "Hard";
-export type Language = "javascript" | "c";
+export type Language = "java" | "c";
 
 export const CATEGORIES: Category[] = ["Matrix", "Pyramid", "Numerical"];
 export const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard"];
-export const LANGUAGES: Language[] = ["javascript", "c"];
+export const LANGUAGES: Language[] = ["java", "c"];
 
 export const LANGUAGE_LABELS: Record<Language, string> = {
-  javascript: "JavaScript (Node.js)",
+  java: "Java (OpenJDK)",
   c: "C (GCC)",
 };
 

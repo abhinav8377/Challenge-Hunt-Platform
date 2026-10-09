@@ -22,8 +22,15 @@ interface Runtime {
   label: string;
 }
 
+interface JavaRuntime {
+  javac: string;
+  java: string;
+  label: string;
+}
+
 interface JudgeStore {
-  runtimes?: Partial<Record<Language, Runtime | null>>;
+  c?: Runtime | null;
+  java?: JavaRuntime | null;
 }
 
 const globalStore = globalThis as unknown as JudgeStore;
@@ -167,13 +174,52 @@ async function probe(cmd: string, argsPrefix: string[], validator: RegExp, label
   return null;
 }
 
-async function resolveJavascript(): Promise<Runtime> {
-  return { cmd: process.execPath, argsPrefix: [], label: path.basename(process.execPath) };
+function detectJavaClassName(code: string): string {
+  const match = code.match(/public\s+(?:final\s+)?class\s+([A-Za-z_$][\w$]*)/);
+  return match ? match[1] : "Solution";
+}
+
+async function resolveJava(): Promise<JavaRuntime | null> {
+  if (globalStore.java !== undefined) return globalStore.java;
+
+  const javacCandidates: string[] = [];
+  const javaCandidates: string[] = [];
+  if (process.env.HTP_JAVAC) javacCandidates.push(process.env.HTP_JAVAC);
+  if (process.env.HTP_JAVA) javaCandidates.push(process.env.HTP_JAVA);
+
+  const javacFound = await which("javac");
+  const javaFound = await which("java");
+  if (javacFound) javacCandidates.push(javacFound);
+  if (javaFound) javaCandidates.push(javaFound);
+
+  let resolved: JavaRuntime | null = null;
+
+  for (const javac of javacCandidates) {
+    const version = await run(javac, ["-version"], { timeoutMs: 8000 });
+    const text = version.stdout + version.stderr;
+    if (version.code !== 0 || !/javac|openjdk|version/i.test(text)) continue;
+
+    const sibling = path.join(path.dirname(javac), process.platform === "win32" ? "java.exe" : "java");
+    let java = process.env.HTP_JAVA ?? null;
+    if (!java && (await fileExists(sibling))) java = sibling;
+    if (!java) java = javaFound;
+    if (!java) continue;
+
+    const javaVersion = await run(java, ["-version"], { timeoutMs: 8000 });
+    if (javaVersion.code !== 0 || !/openjdk|java\(tm\)|version/i.test(javaVersion.stdout + javaVersion.stderr)) {
+      continue;
+    }
+
+    resolved = { javac, java, label: text.split(/\r?\n/)[0].trim() || "javac" };
+    break;
+  }
+
+  globalStore.java = resolved;
+  return resolved;
 }
 
 async function resolveC(): Promise<Runtime | null> {
-  if (!globalStore.runtimes) globalStore.runtimes = {};
-  if ("c" in globalStore.runtimes) return globalStore.runtimes.c ?? null;
+  if (globalStore.c !== undefined) return globalStore.c;
 
   const candidates: string[] = [];
   if (process.env.HTP_CC) candidates.push(process.env.HTP_CC);
@@ -200,7 +246,7 @@ async function resolveC(): Promise<Runtime | null> {
       break;
     }
   }
-  globalStore.runtimes.c = resolved;
+  globalStore.c = resolved;
   return resolved;
 }
 
@@ -235,7 +281,7 @@ function compare(actual: string, expected: string): { status: JudgeStatus; messa
   };
 }
 
-function unavailable(): JudgeResult {
+function unavailable(language: Language): JudgeResult {
   return {
     status: "runtime-unavailable",
     output: "",
@@ -244,7 +290,9 @@ function unavailable(): JudgeResult {
     runtime: "none",
     durationMs: 0,
     message:
-      "No C compiler (gcc) was found on this server (install gcc or set HTP_CC). Please solve this challenge in JavaScript, or try again once the runtime is available.",
+      language === "java"
+        ? "No Java compiler (javac) was found on this server (install OpenJDK or set HTP_JAVAC/HTP_JAVA). Please solve this challenge in C, or try again once the runtime is available."
+        : "No C compiler (gcc) was found on this server (install gcc or set HTP_CC). Please solve this challenge in Java, or try again once the runtime is available.",
   };
 }
 
@@ -252,12 +300,35 @@ export async function judgeCode(language: Language, code: string, expected: stri
   const workDir = await fs.mkdtemp(path.join(os.tmpdir(), "htp-judge-"));
 
   try {
-    if (language === "javascript") {
-      const runtime = await resolveJavascript();
-      const file = path.join(workDir, "solution.js");
-      await fs.writeFile(file, code, "utf8");
-      const outcome = await run(runtime.cmd, [file], { cwd: workDir, timeoutMs: RUN_TIMEOUT_MS });
+    if (language === "java") {
+      const runtime = await resolveJava();
+      if (!runtime) return unavailable("java");
 
+      const className = detectJavaClassName(code);
+      const file = path.join(workDir, `${className}.java`);
+      await fs.writeFile(file, code, "utf8");
+
+      const compile = await run(runtime.javac, ["-encoding", "UTF-8", "-d", workDir, file], {
+        cwd: workDir,
+        timeoutMs: COMPILE_TIMEOUT_MS,
+      });
+      if (compile.timedOut || compile.code !== 0) {
+        return {
+          status: "error",
+          output: "",
+          expected,
+          stderr: compile.stderr || compile.stdout,
+          runtime: runtime.label,
+          durationMs: compile.durationMs,
+          message: "Compilation failed. Check your Java source for syntax errors.",
+        };
+      }
+
+      const outcome = await run(
+        runtime.java,
+        ["-Xmx64m", "-Xss1m", "-Dfile.encoding=UTF-8", "-cp", workDir, className],
+        { cwd: workDir, timeoutMs: RUN_TIMEOUT_MS }
+      );
       if (outcome.timedOut) {
         return {
           status: "timeout",
@@ -293,7 +364,7 @@ export async function judgeCode(language: Language, code: string, expected: stri
     }
 
     const runtime = await resolveC();
-    if (!runtime) return unavailable();
+    if (!runtime) return unavailable("c");
 
     const file = path.join(workDir, "solution.c");
     const binary = path.join(workDir, process.platform === "win32" ? "solution.exe" : "solution");
@@ -354,6 +425,6 @@ export async function judgeCode(language: Language, code: string, expected: stri
 }
 
 export async function availableRuntimes(): Promise<Record<Language, boolean>> {
-  const c = await resolveC();
-  return { javascript: true, c: Boolean(c) };
+  const [java, c] = await Promise.all([resolveJava(), resolveC()]);
+  return { java: Boolean(java), c: Boolean(c) };
 }

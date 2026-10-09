@@ -10,7 +10,14 @@ import {
   type Language,
   type PublicUser,
 } from "@/lib/types";
+import { starterTemplates } from "@/lib/templates";
 import { toast } from "./toast";
+
+const DEFAULT_TEMPLATES = starterTemplates();
+
+function templateFor(challenge: Challenge | null, language: Language): string {
+  return challenge?.codeTemplates?.[language] ?? DEFAULT_TEMPLATES[language] ?? "";
+}
 
 interface ChallengesViewProps {
   user: PublicUser;
@@ -46,7 +53,7 @@ export default function ChallengesView({ user, initialChallenges, initialSolved 
   const [solved, setSolved] = useState<string[]>(initialSolved);
   const [filter, setFilter] = useState<"all" | (typeof CATEGORIES)[number]>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [language, setLanguage] = useState<Language>("javascript");
+  const [language, setLanguage] = useState<Language>("java");
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([]);
   const [running, setRunning] = useState(false);
@@ -173,7 +180,7 @@ export default function ChallengesView({ user, initialChallenges, initialSolved 
   }, [consoleLines]);
 
   const editorKey = active ? `${active.id}:${language}` : "";
-  const code = codeMap[editorKey] ?? active?.codeTemplates[language] ?? "";
+  const code = codeMap[editorKey] ?? templateFor(active, language);
 
   function setCode(value: string) {
     if (!editorKey) return;
@@ -182,7 +189,7 @@ export default function ChallengesView({ user, initialChallenges, initialSolved 
 
   function resetCode() {
     if (!active) return;
-    setCodeMap((prev) => ({ ...prev, [editorKey]: active.codeTemplates[language] ?? "" }));
+    setCodeMap((prev) => ({ ...prev, [editorKey]: templateFor(active, language) }));
     toast("Editor reset to starter template", "info");
   }
 

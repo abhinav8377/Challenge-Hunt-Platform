@@ -67,7 +67,7 @@ const EMPTY_OVERVIEW: Overview = {
     pointsAwarded: 0,
     activeSessions: 0,
   },
-  runtimes: { javascript: true, c: false },
+  runtimes: { java: true, c: false },
   users: [],
   submissions: [],
   leaderboard: [],

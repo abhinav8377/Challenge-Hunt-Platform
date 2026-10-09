@@ -16,7 +16,7 @@ const SECTIONS = [
     icon: "fa-solid fa-terminal",
     title: "Challenge & Submission Rules",
     rules: [
-      "Each pattern challenge must be solved by writing code in the built-in editor — JavaScript or C (subject to server runtime availability).",
+      "Each pattern challenge must be solved by writing code in the built-in editor — Java or C (subject to server runtime availability).",
       "Press 'Run & Verify' to execute your program against the target verification matrix. Output must match line-for-line, including spacing.",
       "Your code is executed in a sandboxed server subprocess with a 5-second time limit. Infinite loops and runaway output are killed automatically.",
       "First successful verification awards the full point value of the challenge. Re-solving a pattern never awards bonus points.",
