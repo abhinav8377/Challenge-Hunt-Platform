@@ -4,9 +4,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { CATEGORIES, LANGUAGES, LANGUAGE_LABELS, type Category, type Challenge, type Difficulty, type Language } from "@/lib/types";
 import ChallengesView from "./challenges-view";
 import LeaderboardPage from "./leaderboard/leaderboard-page";
+import AdminTimerSettings from "./admin-timer-settings";
 import { toast } from "./toast";
 
-type Tab = "dashboard" | "challenges" | "monitor" | "users" | "arena" | "leaderboard";
+type Tab = "dashboard" | "challenges" | "monitor" | "timer" | "users" | "arena" | "leaderboard";
 
 interface OverviewStats {
   users: number;
@@ -79,6 +80,7 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: "fa-solid fa-gauge-high" },
   { id: "challenges", label: "Manage Challenges", icon: "fa-solid fa-layer-group" },
   { id: "monitor", label: "Live Monitor", icon: "fa-solid fa-tower-broadcast" },
+  { id: "timer", label: "Event Timer", icon: "fa-solid fa-stopwatch" },
   { id: "users", label: "Users", icon: "fa-solid fa-users-gear" },
 ];
 
@@ -776,6 +778,18 @@ export default function AdminPanel() {
                   </table>
                 </div>
               )}
+            </Panel>
+          )}
+
+          {tab === "timer" && (
+            <Panel
+              title="Event Timer"
+              icon="fa-solid fa-stopwatch"
+              caption="Homepage start countdown + challenge visibility window"
+            >
+              <div className="p-5 sm:p-6">
+                <AdminTimerSettings />
+              </div>
             </Panel>
           )}
 

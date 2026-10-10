@@ -12,6 +12,14 @@ export interface SessionDoc {
   closedAt?: string | null;
 }
 
+export interface SettingsDoc {
+  id: string;
+  startsAt?: string | null;
+  visible?: boolean;
+  endsAt?: string | null;
+  updatedAt: string;
+}
+
 export async function usersCol(): Promise<Collection<User>> {
   return (await getDatabase()).collection<User>("users");
 }
@@ -30,6 +38,10 @@ export async function sessionsCol(): Promise<Collection<SessionDoc>> {
 
 export async function submissionsCol(): Promise<Collection<Submission>> {
   return (await getDatabase()).collection<Submission>("submissions");
+}
+
+export async function settingsCol(): Promise<Collection<SettingsDoc>> {
+  return (await getDatabase()).collection<SettingsDoc>("settings");
 }
 
 export const NO_ID = { projection: { _id: 0 } } as const;

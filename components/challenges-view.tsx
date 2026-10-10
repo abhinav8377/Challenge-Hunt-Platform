@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   LANGUAGES,
   LANGUAGE_LABELS,
@@ -24,6 +25,7 @@ interface ChallengesViewProps {
   initialSolved: string[];
   initialPatterns?: string[];
   compact?: boolean;
+  endsAt?: string | null;
 }
 
 type ConsoleKind = "info" | "ok" | "fail" | "warn" | "plain";
@@ -55,7 +57,9 @@ export default function ChallengesView({
   initialSolved,
   initialPatterns = [],
   compact = false,
+  endsAt = null,
 }: ChallengesViewProps) {
+  const router = useRouter();
   const [challenges, setChallenges] = useState<Challenge[]>(initialChallenges);
   const [solved, setSolved] = useState<string[]>(initialSolved);
   const [patterns, setPatterns] = useState<string[]>(initialPatterns);
@@ -90,6 +94,11 @@ export default function ChallengesView({
   const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/challenges", { cache: "no-store" });
+      if (res.status === 403) {
+        // Window closed for this player — re-render the server page to show the lock screen.
+        router.refresh();
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       setChallenges(data.challenges ?? []);
@@ -99,7 +108,7 @@ export default function ChallengesView({
     } catch {
       // offline
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     const boot = setTimeout(() => {
@@ -129,6 +138,25 @@ export default function ChallengesView({
       window.dispatchEvent(new Event("htp-overlay-close"));
     };
   }, [activeId]);
+
+  const endMs = endsAt ? Date.parse(endsAt) : NaN;
+  const hasWindow = !Number.isNaN(endMs);
+  const [now, setNow] = useState(() => Date.now());
+  const windowExpired = hasWindow && now >= endMs;
+  const expiryRefreshedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasWindow) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [hasWindow]);
+
+  useEffect(() => {
+    if (windowExpired && !expiryRefreshedRef.current) {
+      expiryRefreshedRef.current = true;
+      router.refresh();
+    }
+  }, [windowExpired, router]);
 
   function startBanCountdown() {
     if (banStartedRef.current) return;
@@ -381,8 +409,52 @@ export default function ChallengesView({
     </div>
   );
 
+  const windowRemaining = hasWindow ? Math.max(0, endMs - now) : 0;
+  const windowParts = {
+    days: Math.floor(windowRemaining / 86400000),
+    hours: Math.floor((windowRemaining % 86400000) / 3600000),
+    mins: Math.floor((windowRemaining % 3600000) / 60000),
+    secs: Math.floor((windowRemaining % 60000) / 1000),
+  };
+
   return (
     <div className={compact ? "space-y-5" : "space-y-8 pb-8"}>
+      {hasWindow && !compact && (
+        <div
+          className={`glass-panel rounded-2xl border px-5 py-4 flex flex-col sm:flex-row items-center justify-between gap-4 ${
+            windowExpired ? "border-rose-500/40" : "border-cyan-500/40"
+          }`}
+        >
+          <div className="flex items-center gap-3 text-center sm:text-left">
+            <div className="w-11 h-11 rounded-xl bg-brand-navy border border-cyan-500/40 flex items-center justify-center shrink-0">
+              <i
+                className={`fa-solid ${
+                  windowExpired ? "fa-hourglass-end text-rose-400" : "fa-stopwatch text-brand-neon-cyan"
+                } text-lg`}
+                aria-hidden="true"
+              />
+            </div>
+            <div>
+              <div className="font-orbitron text-[11px] sm:text-xs tracking-[0.25em] text-cyan-400 uppercase font-bold">
+                {windowExpired ? "Time Up — Window Closed" : "Time Left To Solve"}
+              </div>
+              <div className="font-mono text-[11px] text-cyan-500/70 mt-0.5">
+                {windowExpired ? "Submissions are no longer accepted." : `Closes ${new Date(endMs).toLocaleString()}`}
+              </div>
+            </div>
+          </div>
+          <div className="flex items-start gap-1 sm:gap-1.5" aria-live="polite">
+            <MiniBox value={windowParts.days} label="Days" expired={windowExpired} />
+            <MiniColon />
+            <MiniBox value={windowParts.hours} label="Hours" expired={windowExpired} />
+            <MiniColon />
+            <MiniBox value={windowParts.mins} label="Mins" expired={windowExpired} />
+            <MiniColon />
+            <MiniBox value={windowParts.secs} label="Secs" expired={windowExpired} />
+          </div>
+        </div>
+      )}
+
       {compact ? (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="min-w-0">
@@ -759,5 +831,28 @@ export default function ChallengesView({
         </div>
       )}
     </div>
+  );
+}
+
+function MiniBox({ value, label, expired }: { value: number; label: string; expired: boolean }) {
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div
+        className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl border flex items-center justify-center font-orbitron text-lg sm:text-xl font-black tabular-nums ${
+          expired ? "bg-rose-950/50 border-rose-500/40 text-rose-300" : "bg-brand-deep border-cyan-400/40 text-white"
+        }`}
+      >
+        {String(value).padStart(2, "0")}
+      </div>
+      <span className="font-rajdhani text-[10px] font-semibold uppercase tracking-widest text-cyan-400/70">{label}</span>
+    </div>
+  );
+}
+
+function MiniColon() {
+  return (
+    <span className="self-start mt-2.5 sm:mt-3 font-orbitron text-lg sm:text-xl font-black text-cyan-400/50 select-none" aria-hidden="true">
+      :
+    </span>
   );
 }

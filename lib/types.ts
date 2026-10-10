@@ -110,3 +110,8 @@ export interface LeaderboardRow {
   lastSeenAt: string;
   group: string;
 }
+
+export interface EventTimerSettings {
+  startsAt: string | null;
+  updatedAt: string;
+}

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Logo from "@/components/logo";
 import Footer from "@/components/footer";
 import AuthNotice from "@/components/auth-notice";
+import EventTimer from "@/components/event-timer";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,10 @@ export default async function HomePage() {
                 Write algorithms, compile pattern matrices, execute test cases, and claim your place on the live hacker
                 leaderboard.
               </p>
+            </div>
+
+            <div className="mt-8">
+              <EventTimer />
             </div>
 
             <div className="mt-8 flex flex-wrap justify-center items-center gap-4">

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { LeaderboardRow } from "@/lib/types";
 import Podium from "./podium";
 import LeaderboardTable, { type SortDir, type SortKey } from "./leaderboard-table";
 
-export default function LeaderboardPage() {
+export default function LeaderboardPage({ windowEndsAt = null }: { windowEndsAt?: string | null }) {
+  const router = useRouter();
   const [rows, setRows] = useState<LeaderboardRow[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [search, setSearch] = useState("");
@@ -13,9 +15,14 @@ export default function LeaderboardPage() {
   const [sortKey, setSortKey] = useState<SortKey>("rank");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     try {
       const res = await fetch("/api/leaderboard", { cache: "no-store" });
+      if (res.status === 403) {
+        // Window closed for this player — re-render the server page to show the lock screen.
+        router.refresh();
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       setRows(Array.isArray(data.rows) ? data.rows : []);
@@ -23,7 +30,7 @@ export default function LeaderboardPage() {
     } catch {
       // offline
     }
-  };
+  }, [router]);
 
   useEffect(() => {
     const boot = setTimeout(() => {
@@ -33,7 +40,7 @@ export default function LeaderboardPage() {
     source.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (payload.type === "leaderboard") refresh();
+        if (payload.type === "leaderboard" || payload.type === "challenges") refresh();
       } catch {
         // ignore malformed frames
       }
@@ -42,7 +49,20 @@ export default function LeaderboardPage() {
       clearTimeout(boot);
       source.close();
     };
-  }, []);
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!windowEndsAt) return;
+    const endMs = Date.parse(windowEndsAt);
+    if (Number.isNaN(endMs)) return;
+    const remaining = endMs - Date.now();
+    if (remaining <= 0) {
+      router.refresh();
+      return;
+    }
+    const id = setTimeout(() => router.refresh(), remaining + 500);
+    return () => clearTimeout(id);
+  }, [windowEndsAt, router]);
 
   const podiumRows = useMemo(() => [...rows].sort((a, b) => a.rank - b.rank).slice(0, 3), [rows]);
 

@@ -3,7 +3,8 @@ type PlatformEvent =
   | { type: "challenges" }
   | { type: "submissions" }
   | { type: "users" }
-  | { type: "stats" };
+  | { type: "stats" }
+  | { type: "settings" };
 
 type Handler = (event: PlatformEvent) => void;
 

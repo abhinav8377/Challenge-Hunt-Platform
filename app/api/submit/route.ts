@@ -5,6 +5,7 @@ import { getSessionUserRecord } from "@/lib/auth";
 import { judgeCode } from "@/lib/judge";
 import { broadcast } from "@/lib/events";
 import { broadcastLeaderboard } from "@/lib/leaderboard";
+import { getChallengeWindow } from "@/lib/challenge-window";
 import { LANGUAGES, type Language, type Submission } from "@/lib/types";
 
 const MAX_CODE_LENGTH = 50000;
@@ -13,6 +14,16 @@ const MAX_STORED_SUBMISSIONS = 300;
 export async function POST(req: NextRequest) {
   const user = await getSessionUserRecord();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+  if (user.role !== "admin") {
+    const window = await getChallengeWindow();
+    if (!window.open) {
+      return NextResponse.json(
+        { error: "The challenge window is closed. Submissions are not accepted right now." },
+        { status: 403 }
+      );
+    }
+  }
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: "Invalid request body." }, { status: 400 });

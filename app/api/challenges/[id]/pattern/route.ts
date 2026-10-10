@@ -4,6 +4,7 @@ import { getSessionUserRecord } from "@/lib/auth";
 import { firstDiffLine, normalizeOutput } from "@/lib/judge";
 import { broadcastLeaderboard } from "@/lib/leaderboard";
 import { broadcast } from "@/lib/events";
+import { getChallengeWindow } from "@/lib/challenge-window";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -12,6 +13,16 @@ const MAX_PATTERN_LENGTH = 20000;
 export async function POST(req: NextRequest, ctx: Ctx) {
   const user = await getSessionUserRecord();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+  if (user.role !== "admin") {
+    const window = await getChallengeWindow();
+    if (!window.open) {
+      return NextResponse.json(
+        { error: "The challenge window is closed. Pattern checks are disabled right now." },
+        { status: 403 }
+      );
+    }
+  }
 
   const { id } = await ctx.params;
   const body = await req.json().catch(() => null);

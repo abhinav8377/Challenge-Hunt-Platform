@@ -6,11 +6,22 @@ import { starterTemplates } from "@/lib/templates";
 import { broadcast } from "@/lib/events";
 import { validateChallengeInput } from "@/lib/validate";
 import { availableRuntimes } from "@/lib/judge";
+import { getChallengeWindow } from "@/lib/challenge-window";
 import type { Challenge } from "@/lib/types";
 
 export async function GET() {
   const user = await getSessionUserRecord();
   if (!user) return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+
+  if (user.role !== "admin") {
+    const window = await getChallengeWindow();
+    if (!window.open) {
+      return NextResponse.json(
+        { error: "Challenges are locked until the admin opens the event window." },
+        { status: 403 }
+      );
+    }
+  }
 
   const challenges = await challengesCol();
   const [list, runtimes, team] = await Promise.all([
