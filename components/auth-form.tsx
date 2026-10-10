@@ -49,7 +49,7 @@ export default function AuthForm({ mode, next, notice }: AuthFormProps) {
 
       window.dispatchEvent(new Event("htp-auth"));
       toast(isRegister ? `Account created. Welcome, ${data.user.username}!` : `Welcome back, ${data.user.username}!`);
-      router.push(safeNext);
+      router.push(data.user?.role === "admin" ? "/admin" : safeNext);
       router.refresh();
     } catch {
       setError("Network error. Is the platform online?");

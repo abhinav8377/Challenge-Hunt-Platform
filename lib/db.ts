@@ -8,6 +8,8 @@ export interface SessionDoc {
   _id: string;
   userId: string;
   expiresAt: string;
+  lastSeenAt?: string;
+  closedAt?: string | null;
 }
 
 export async function usersCol(): Promise<Collection<User>> {

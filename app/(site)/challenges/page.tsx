@@ -25,6 +25,7 @@ export default async function ChallengesPage() {
         user={toPublicUser(user)}
         initialChallenges={challenges}
         initialSolved={team ? team.solved : user.solved}
+        initialPatterns={user.patterns ?? []}
       />
     </main>
   );

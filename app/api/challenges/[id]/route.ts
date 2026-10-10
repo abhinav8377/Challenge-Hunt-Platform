@@ -79,7 +79,7 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
   if (!removed) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
 
   await (await usersCol()).updateMany(
-    { solved: id },
+    { $or: [{ solved: id }, { patterns: id }] },
     [
       {
         $set: {
@@ -88,6 +88,13 @@ export async function DELETE(_req: NextRequest, ctx: Ctx) {
               input: { $ifNull: ["$solved", []] },
               as: "solvedId",
               cond: { $ne: ["$$solvedId", id] },
+            },
+          },
+          patterns: {
+            $filter: {
+              input: { $ifNull: ["$patterns", []] },
+              as: "patternId",
+              cond: { $ne: ["$$patternId", id] },
             },
           },
           score: { $max: [0, { $subtract: [{ $ifNull: ["$score", 0] }, removed.points] }] },

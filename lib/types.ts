@@ -1,5 +1,5 @@
 export type Role = "admin" | "user";
-export type Category = "Matrix" | "Pyramid" | "Numerical";
+export type Category = string;
 export type Difficulty = "Easy" | "Medium" | "Hard";
 export type Language = "java" | "c";
 
@@ -28,6 +28,7 @@ export interface User {
   bannedAt?: string;
   tabViolations?: number;
   teamId?: string;
+  patterns?: string[];
 }
 
 export interface Team {

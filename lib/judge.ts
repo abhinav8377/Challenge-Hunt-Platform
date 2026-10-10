@@ -260,7 +260,7 @@ export function normalizeOutput(value: string): string {
     .replace(/\n+$/, "");
 }
 
-function firstDiffLine(actual: string, expected: string): number {
+export function firstDiffLine(actual: string, expected: string): number {
   const a = normalizeOutput(actual).split("\n");
   const e = normalizeOutput(expected).split("\n");
   const max = Math.max(a.length, e.length);

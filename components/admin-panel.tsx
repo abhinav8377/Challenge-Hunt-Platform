@@ -120,7 +120,7 @@ interface ChallengeForm {
 const EMPTY_FORM: ChallengeForm = {
   id: null,
   title: "",
-  category: "Matrix",
+  category: "",
   difficulty: "Easy",
   points: "150",
   desc: "",
@@ -936,6 +936,14 @@ export default function AdminPanel() {
               </div>
             </div>
 
+            <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/5 p-3 font-mono text-[11px] text-cyan-300/90 leading-relaxed">
+              <i className="fa-solid fa-diagram-project mr-1.5" aria-hidden="true" />
+              <span className="font-bold text-cyan-200">Player flow:</span> Stage 1 — the player reads your problem
+              statement and types the pattern (verified server-side, answer hidden). Stage 2 — the code editor
+              unlocks, the judge runs their code against the expected output, and correct code awards points once
+              per team.
+            </div>
+
             <form onSubmit={saveChallenge} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
@@ -951,17 +959,20 @@ export default function AdminPanel() {
                 </div>
                 <div>
                   <label className="block font-mono text-xs text-cyan-400 mb-1">Category</label>
-                  <select
+                  <input
+                    type="text"
+                    required
+                    list="challenge-categories"
                     value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
+                    onChange={(e) => setForm({ ...form, category: e.target.value })}
+                    placeholder="e.g. Matrix"
                     className="w-full bg-brand-navy border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400"
-                  >
+                  />
+                  <datalist id="challenge-categories">
                     {CATEGORIES.map((cat) => (
-                      <option key={cat} value={cat}>
-                        {cat}
-                      </option>
+                      <option key={cat} value={cat} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
 
@@ -993,20 +1004,23 @@ export default function AdminPanel() {
               </div>
 
               <div>
-                <label className="block font-mono text-xs text-cyan-400 mb-1">Problem Description</label>
+                <label className="block font-mono text-xs text-cyan-400 mb-1">
+                  Problem Statement (Stage 1 — describe the pattern in words)
+                </label>
                 <textarea
                   rows={3}
                   required
                   value={form.desc}
                   onChange={(e) => setForm({ ...form, desc: e.target.value })}
-                  placeholder="Write code to print pattern..."
+                  placeholder="Describe the pattern in words: rows, symbols, counts... e.g. Print a right triangle of stars with n rows."
                   className="w-full bg-brand-navy border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400 font-sans"
                 />
               </div>
 
               <div>
                 <label className="block font-mono text-xs text-cyan-400 mb-1">
-                  Target Verification Pattern Output (trailing spaces ignored)
+                  Expected Pattern (Stage 1 answer &amp; Stage 2 judge target — hidden from players until Stage 1
+                  passes; trailing spaces ignored)
                 </label>
                 <textarea
                   rows={5}

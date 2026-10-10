@@ -24,6 +24,7 @@ export async function GET() {
   return NextResponse.json({
     challenges: list,
     solved: team ? team.solved : user.solved,
+    patterns: user.patterns ?? [],
     role: user.role,
     runtimes,
   });

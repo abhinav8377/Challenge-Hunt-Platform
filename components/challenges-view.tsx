@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  CATEGORIES,
   LANGUAGES,
   LANGUAGE_LABELS,
   type Challenge,
@@ -23,6 +22,7 @@ interface ChallengesViewProps {
   user: PublicUser | null;
   initialChallenges: Challenge[];
   initialSolved: string[];
+  initialPatterns?: string[];
   compact?: boolean;
 }
 
@@ -49,11 +49,21 @@ const DIFF_STYLES: Record<string, string> = {
 
 let lineSeq = 0;
 
-export default function ChallengesView({ user, initialChallenges, initialSolved, compact = false }: ChallengesViewProps) {
+export default function ChallengesView({
+  user,
+  initialChallenges,
+  initialSolved,
+  initialPatterns = [],
+  compact = false,
+}: ChallengesViewProps) {
   const [challenges, setChallenges] = useState<Challenge[]>(initialChallenges);
   const [solved, setSolved] = useState<string[]>(initialSolved);
-  const [filter, setFilter] = useState<"all" | (typeof CATEGORIES)[number]>("all");
+  const [patterns, setPatterns] = useState<string[]>(initialPatterns);
+  const [filter, setFilter] = useState<string>("all");
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [patternInput, setPatternInput] = useState("");
+  const [checkingPattern, setCheckingPattern] = useState(false);
   const [language, setLanguage] = useState<Language>("java");
   const [codeMap, setCodeMap] = useState<Record<string, string>>({});
   const [consoleLines, setConsoleLines] = useState<ConsoleLine[]>([]);
@@ -67,9 +77,14 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
   const consoleRef = useRef<HTMLDivElement>(null);
 
   const active = useMemo(() => challenges.find((c) => c.id === activeId) ?? null, [challenges, activeId]);
+  const categoryOptions = useMemo(
+    () => ["all", ...Array.from(new Set(challenges.map((c) => c.category)))],
+    [challenges]
+  );
+  const effectiveFilter = filter === "all" || categoryOptions.includes(filter) ? filter : "all";
   const filtered = useMemo(
-    () => (filter === "all" ? challenges : challenges.filter((c) => c.category === filter)),
-    [challenges, filter]
+    () => (effectiveFilter === "all" ? challenges : challenges.filter((c) => c.category === effectiveFilter)),
+    [challenges, effectiveFilter]
   );
 
   const refresh = useCallback(async () => {
@@ -79,6 +94,7 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
       const data = await res.json();
       setChallenges(data.challenges ?? []);
       setSolved(data.solved ?? []);
+      setPatterns(data.patterns ?? []);
       if (data.runtimes) setRuntimes(data.runtimes);
     } catch {
       // offline
@@ -219,7 +235,18 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
     document.body.classList.add("htp-overlay-open");
     window.dispatchEvent(new Event("htp-overlay-open"));
     setActiveId(id);
-    setConsoleLines([{ id: ++lineSeq, kind: "info", text: '[System] Write your solution algorithm and click "Run & Verify".' }]);
+    setPatternInput("");
+    const unlocked = solved.includes(id) || patterns.includes(id);
+    setStep(unlocked ? 2 : 1);
+    setConsoleLines([
+      {
+        id: ++lineSeq,
+        kind: "info",
+        text: unlocked
+          ? '[System] Pattern already verified — write your solution code and click "Run & Verify".'
+          : '[System] Stage 1: read the problem statement and type the pattern. Verify it to unlock the code editor.',
+      },
+    ]);
   }
 
   async function runCode() {
@@ -295,14 +322,57 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
     }
   }
 
+  async function verifyPattern() {
+    if (!active || checkingPattern) return;
+    if (!patternInput.trim()) {
+      pushLine("fail", "[Stage 1] Type the pattern before verifying.");
+      return;
+    }
+    setCheckingPattern(true);
+    try {
+      const res = await fetch(`/api/challenges/${active.id}/pattern`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pattern: patternInput }),
+      });
+      const data = await res.json().catch(() => ({}));
+
+      if (res.status === 401) {
+        pushLine("fail", "[Auth] Session expired. Sign in again to verify your pattern.");
+        toast("Session expired", "error");
+        return;
+      }
+      if (!res.ok) {
+        pushLine("fail", `[Stage 1] ${data.error ?? "Pattern check failed."}`);
+        toast(data.error ?? "Pattern check failed", "error");
+        return;
+      }
+      if (data.verified) {
+        setPatterns((prev) => (prev.includes(active.id) ? prev : [...prev, active.id]));
+        setStep(2);
+        pushLine("ok", "[✓] Stage 1 passed — your pattern matches the target matrix.");
+        pushLine('info', '[System] Stage 2: write your code and click "Run & Verify" to solve the challenge.');
+        toast("Pattern verified — code editor unlocked!");
+      } else {
+        pushLine("fail", `[Stage 1] ${data.error ?? "Pattern mismatch."}`);
+        toast("Pattern does not match yet", "error");
+      }
+    } catch {
+      pushLine("fail", "[Network] Could not reach the verification engine.");
+      toast("Network error", "error");
+    } finally {
+      setCheckingPattern(false);
+    }
+  }
+
   const filterChips = (
     <div className="flex flex-wrap items-center gap-2 font-rajdhani font-semibold text-sm">
-      {(["all", ...CATEGORIES] as const).map((cat) => (
+      {categoryOptions.map((cat) => (
         <button
           key={cat}
           onClick={() => setFilter(cat)}
           className={`px-4 py-1.5 rounded-lg font-bold transition-all ${
-            filter === cat ? "bg-cyan-500 text-black" : "glass-panel text-gray-300 hover:text-cyan-300"
+            effectiveFilter === cat ? "bg-cyan-500 text-black" : "glass-panel text-gray-300 hover:text-cyan-300"
           }`}
         >
           {cat === "all" ? "All" : cat}
@@ -437,7 +507,7 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
                       }}
                       className="relative z-10 w-full py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/40 text-cyan-300 font-rajdhani font-bold text-sm uppercase hover:bg-cyan-500 hover:text-black transition-all"
                     >
-                      Open Code Editor
+                      {patterns.includes(challenge.id) ? "Continue · Write Code" : "Start Challenge"}
                     </button>
                   )}
                 </div>
@@ -464,6 +534,27 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
                     Solved
                   </span>
                 )}
+                <div className="hidden sm:flex items-center gap-1.5 font-mono text-[10px] uppercase shrink-0 ml-auto">
+                  <span
+                    className={`px-2 py-0.5 rounded border ${
+                      step === 1
+                        ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-200"
+                        : "bg-emerald-500/15 border-emerald-500/40 text-emerald-300"
+                    }`}
+                  >
+                    {step === 1 ? "1 · Pattern" : "✓ Pattern"}
+                  </span>
+                  <i className="fa-solid fa-chevron-right text-[8px] text-gray-500" aria-hidden="true" />
+                  <span
+                    className={`px-2 py-0.5 rounded border ${
+                      step === 2
+                        ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-200"
+                        : "bg-white/5 border-white/10 text-gray-500"
+                    }`}
+                  >
+                    2 · Code
+                  </span>
+                </div>
               </div>
               <button
                 onClick={() => setActiveId(null)}
@@ -483,14 +574,43 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
                   <p className="font-sans text-sm text-gray-300 leading-relaxed">{active.desc}</p>
                 </div>
 
-                <div>
-                  <h4 className="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wider mb-2">
-                    {"// Target Matrix Pattern"}
-                  </h4>
-                  <pre className="bg-black/90 border border-cyan-500/30 p-4 rounded-lg font-mono text-xs text-cyan-300 overflow-x-auto leading-relaxed whitespace-pre-wrap">
-                    {active.sampleOutput}
-                  </pre>
-                </div>
+                {step === 1 ? (
+                  <div>
+                    <h4 className="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wider mb-2">
+                      {"// Stage 1 — Write the Pattern"}
+                    </h4>
+                    <p className="font-sans text-xs text-gray-400 mb-2">
+                      Derive the exact pattern from the problem statement and type it below. Line breaks matter;
+                      trailing spaces are ignored. The code editor unlocks once this matches.
+                    </p>
+                    <textarea
+                      rows={7}
+                      value={patternInput}
+                      onChange={(e) => setPatternInput(e.target.value)}
+                      spellCheck={false}
+                      placeholder={"Type the pattern here...\n*\n**\n***"}
+                      className="w-full bg-black/80 border border-cyan-500/30 rounded-lg p-3 font-mono text-xs text-cyan-200 resize-none focus:outline-none focus:border-cyan-400 leading-relaxed"
+                    />
+                    <button
+                      type="button"
+                      onClick={verifyPattern}
+                      disabled={checkingPattern}
+                      className="mt-2 w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-orbitron font-extrabold text-xs uppercase rounded-lg shadow-neon-cyan hover:shadow-neon-blue transition-all disabled:opacity-60 flex items-center justify-center gap-2"
+                    >
+                      <i className={`fa-solid ${checkingPattern ? "fa-spinner fa-spin" : "fa-shield-halved"}`} aria-hidden="true" />
+                      {checkingPattern ? "Verifying..." : "Verify Pattern · Unlock Code"}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <h4 className="font-orbitron font-bold text-sm text-cyan-400 uppercase tracking-wider mb-2">
+                      {"// Stage 2 — Verified Target Pattern"}
+                    </h4>
+                    <pre className="bg-black/90 border border-cyan-500/30 p-4 rounded-lg font-mono text-xs text-cyan-300 overflow-x-auto leading-relaxed whitespace-pre-wrap">
+                      {active.sampleOutput}
+                    </pre>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap gap-2">
                   {LANGUAGES.map((lang) => (
@@ -510,58 +630,82 @@ export default function ChallengesView({ user, initialChallenges, initialSolved,
               </div>
 
               <div className="lg:col-span-7 flex flex-col h-full bg-brand-navy/60 min-h-0">
-                <div className="px-4 py-2 border-b border-cyan-500/20 flex items-center justify-between bg-black/40 gap-3">
-                  <div className="flex items-center gap-3">
-                    <label className="font-mono text-xs text-gray-400">Language:</label>
-                    <select
-                      value={language}
-                      onChange={(e) => setLanguage(e.target.value as Language)}
-                      className="bg-brand-navy border border-cyan-500/30 text-cyan-300 font-mono text-xs rounded px-2.5 py-1 focus:outline-none"
-                    >
-                      {LANGUAGES.map((lang) => (
-                        <option key={lang} value={lang}>
-                          {LANGUAGE_LABELS[lang]}
-                          {runtimes?.[lang] === false ? " (no runtime)" : ""}
-                        </option>
-                      ))}
-                    </select>
+                {step === 2 ? (
+                  <div className="px-4 py-2 border-b border-cyan-500/20 flex items-center justify-between bg-black/40 gap-3">
+                    <div className="flex items-center gap-3">
+                      <label className="font-mono text-xs text-gray-400">Language:</label>
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value as Language)}
+                        className="bg-brand-navy border border-cyan-500/30 text-cyan-300 font-mono text-xs rounded px-2.5 py-1 focus:outline-none"
+                      >
+                        {LANGUAGES.map((lang) => (
+                          <option key={lang} value={lang}>
+                            {LANGUAGE_LABELS[lang]}
+                            {runtimes?.[lang] === false ? " (no runtime)" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button onClick={resetCode} className="text-xs text-gray-400 hover:text-cyan-300 font-mono">
+                      <i className="fa-solid fa-rotate-left mr-1" /> Reset Code
+                    </button>
                   </div>
-                  <button onClick={resetCode} className="text-xs text-gray-400 hover:text-cyan-300 font-mono">
-                    <i className="fa-solid fa-rotate-left mr-1" /> Reset Code
-                  </button>
-                </div>
+                ) : (
+                  <div className="px-4 py-2 border-b border-cyan-500/20 bg-black/40">
+                    <span className="font-mono text-xs text-gray-400 uppercase">
+                      <i className="fa-solid fa-lock mr-2 text-amber-400" aria-hidden="true" />
+                      Code editor locked — verify Stage 1 first
+                    </span>
+                  </div>
+                )}
 
-                <div className="flex-1 relative font-mono text-xs flex min-h-0">
-                  <div
-                    ref={gutterRef}
-                    className="w-10 bg-black/40 py-3 text-right pr-2 select-none border-r border-cyan-500/10 text-gray-600 overflow-hidden font-mono text-xs leading-relaxed"
-                  >
-                    {code.split("\n").map((_, index) => (
-                      <div key={index}>{index + 1}</div>
-                    ))}
+                {step === 1 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center p-6 min-h-0">
+                    <i className="fa-solid fa-lock text-4xl text-amber-400/50" aria-hidden="true" />
+                    <p className="font-orbitron font-bold text-sm text-gray-200 uppercase">Stage 2 Locked</p>
+                    <p className="font-sans text-xs text-gray-500 max-w-sm leading-relaxed">
+                      The code editor unlocks once your pattern matches the target matrix. Solve Stage 1 on the
+                      left panel.
+                    </p>
                   </div>
-                  <textarea
-                    ref={textareaRef}
-                    value={code}
-                    onChange={(e) => setCode(e.target.value)}
-                    onKeyDown={handleEditorKeyDown}
-                    onScroll={syncScroll}
-                    spellCheck={false}
-                    className="w-full h-full bg-black/80 text-cyan-200 p-3 focus:outline-none font-mono text-xs leading-relaxed resize-none selection:bg-cyan-500 selection:text-black"
-                  />
-                </div>
+                ) : (
+                  <div className="flex-1 relative font-mono text-xs flex min-h-0">
+                    <div
+                      ref={gutterRef}
+                      className="w-10 bg-black/40 py-3 text-right pr-2 select-none border-r border-cyan-500/10 text-gray-600 overflow-hidden font-mono text-xs leading-relaxed"
+                    >
+                      {code.split("\n").map((_, index) => (
+                        <div key={index}>{index + 1}</div>
+                      ))}
+                    </div>
+                    <textarea
+                      ref={textareaRef}
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      onKeyDown={handleEditorKeyDown}
+                      onScroll={syncScroll}
+                      spellCheck={false}
+                      className="w-full h-full bg-black/80 text-cyan-200 p-3 focus:outline-none font-mono text-xs leading-relaxed resize-none selection:bg-cyan-500 selection:text-black"
+                    />
+                  </div>
+                )}
 
                 <div className="border-t border-cyan-500/20 bg-black/90 p-4 space-y-3">
                   <div className="flex items-center justify-between gap-3">
-                    <span className="font-mono text-xs text-cyan-400 uppercase">{"// TekQbe Verification Engine"}</span>
-                    <button
-                      onClick={runCode}
-                      disabled={running}
-                      className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-orbitron font-extrabold text-xs uppercase rounded hover:shadow-neon-cyan transition-all flex items-center gap-2 disabled:opacity-60"
-                    >
-                      <i className={`fa-solid ${running ? "fa-spinner fa-spin" : "fa-play"}`} />
-                      {running ? "Running..." : "Run & Verify"}
-                    </button>
+                    <span className="font-mono text-xs text-cyan-400 uppercase">
+                      {step === 1 ? "// Pattern Verification Console" : "// TekQbe Verification Engine"}
+                    </span>
+                    {step === 2 && (
+                      <button
+                        onClick={runCode}
+                        disabled={running}
+                        className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 text-black font-orbitron font-extrabold text-xs uppercase rounded hover:shadow-neon-cyan transition-all flex items-center gap-2 disabled:opacity-60"
+                      >
+                        <i className={`fa-solid ${running ? "fa-spinner fa-spin" : "fa-play"}`} />
+                        {running ? "Running..." : "Run & Verify"}
+                      </button>
+                    )}
                   </div>
 
                   <div

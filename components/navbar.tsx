@@ -75,6 +75,11 @@ export default function Navbar() {
 
   if (overlayOpen) return null;
 
+  const hideNavLinks =
+    !user ||
+    pathname === "/admin" ||
+    (pathname === "/profile" && user.role === "admin");
+
   return (
     <nav
       className={`sticky top-0 z-40 border-b border-cyan-500/10 px-4 lg:px-8 py-3 transition-colors duration-300 ${
@@ -96,7 +101,7 @@ export default function Navbar() {
           </div>
         </Link>
 
-        {user && pathname !== "/admin" && (
+        {!hideNavLinks && (
           <div className="hidden md:flex items-center gap-6 lg:gap-8 font-rajdhani text-sm font-semibold tracking-wide">
             {NAV_LINKS.map((link) => {
               const active = pathname === link.href;
@@ -215,8 +220,7 @@ export default function Navbar() {
 
       {menuOpen && (
         <div className="md:hidden mt-3 rounded-xl bg-brand-deep/95 backdrop-blur-md border border-cyan-500/20 p-4 flex flex-col gap-1 font-rajdhani text-base font-semibold">
-          {user &&
-            pathname !== "/admin" &&
+          {!hideNavLinks &&
             NAV_LINKS.map((link) => (
               <Link
                 key={link.href}

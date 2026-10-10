@@ -4,6 +4,7 @@ import "@fortawesome/fontawesome-free/css/all.min.css";
 import "./globals.css";
 import Background from "@/components/background";
 import { ToastHost } from "@/components/toast";
+import SessionWatchdog from "@/components/session-watchdog";
 
 const inter = Inter({ subsets: ["latin"], variable: "--f-inter", display: "swap" });
 const orbitron = Orbitron({ subsets: ["latin"], variable: "--f-orbitron", display: "swap" });
@@ -33,6 +34,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Background />
         {children}
         <ToastHost />
+        <SessionWatchdog />
       </body>
     </html>
   );

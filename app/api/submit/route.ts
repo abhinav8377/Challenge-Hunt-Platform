@@ -32,12 +32,24 @@ export async function POST(req: NextRequest) {
   const challenge = await (await challengesCol()).findOne({ id: challengeId }, { projection: { _id: 0 } });
   if (!challenge) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
 
-  const result = await judgeCode(language, code, challenge.sampleOutput);
-
   const users = await usersCol();
   const teams = await teamsCol();
   const fresh = await users.findOne({ id: user.id }, NO_ID);
   const team = fresh?.teamId ? await teams.findOne({ id: fresh.teamId }, NO_ID) : null;
+
+  const patternVerified =
+    !!fresh &&
+    ((fresh.patterns ?? []).includes(challenge.id) ||
+      fresh.solved.includes(challenge.id) ||
+      (team?.solved ?? []).includes(challenge.id));
+  if (!patternVerified) {
+    return NextResponse.json(
+      { error: "Stage 1 locked: verify your pattern against the problem statement before submitting code." },
+      { status: 403 }
+    );
+  }
+
+  const result = await judgeCode(language, code, challenge.sampleOutput);
 
   let earned = 0;
 
