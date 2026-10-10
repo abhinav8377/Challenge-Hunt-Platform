@@ -47,6 +47,8 @@ export async function POST(req: NextRequest) {
     category: parsed.value.category,
     difficulty: parsed.value.difficulty,
     points: parsed.value.points,
+    patternPoints: parsed.value.patternPoints,
+    codePoints: parsed.value.codePoints,
     desc: parsed.value.desc,
     sampleOutput: parsed.value.sampleOutput,
     codeTemplates: { ...starterTemplates(), ...(parsed.value.codeTemplates ?? {}) },

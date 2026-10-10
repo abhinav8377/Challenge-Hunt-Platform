@@ -38,6 +38,7 @@ export interface Team {
   leaderId: string;
   memberIds: string[];
   solved: string[];
+  patterns?: string[];
   score: number;
   createdAt: string;
 }
@@ -59,6 +60,8 @@ export interface Challenge {
   category: Category;
   difficulty: Difficulty;
   points: number;
+  patternPoints?: number;
+  codePoints?: number;
   desc: string;
   sampleOutput: string;
   codeTemplates: Record<Language, string>;

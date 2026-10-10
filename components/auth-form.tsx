@@ -47,10 +47,17 @@ export default function AuthForm({ mode, next, notice }: AuthFormProps) {
         return;
       }
 
-      window.dispatchEvent(new Event("htp-auth"));
-      toast(isRegister ? `Account created. Welcome, ${data.user.username}!` : `Welcome back, ${data.user.username}!`);
-      router.push(data.user?.role === "admin" ? "/admin" : safeNext);
-      router.refresh();
+      if (isRegister) {
+        // Registration never opens the portal — send the player to sign in first.
+        toast(`Account created, ${data.user.username}! Sign in to enter the arena.`);
+        router.push(`/login?next=${encodeURIComponent(safeNext)}&registered=1`);
+        router.refresh();
+      } else {
+        window.dispatchEvent(new Event("htp-auth"));
+        toast(`Welcome back, ${data.user.username}!`);
+        router.push(data.user?.role === "admin" ? "/admin" : safeNext);
+        router.refresh();
+      }
     } catch {
       setError("Network error. Is the platform online?");
       setLoading(false);

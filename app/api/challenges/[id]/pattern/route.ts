@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { challengesCol, usersCol } from "@/lib/db";
+import { challengesCol, nowISO, teamsCol, usersCol } from "@/lib/db";
 import { getSessionUserRecord } from "@/lib/auth";
 import { firstDiffLine, normalizeOutput } from "@/lib/judge";
+import { broadcastLeaderboard } from "@/lib/leaderboard";
+import { broadcast } from "@/lib/events";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -22,27 +24,61 @@ export async function POST(req: NextRequest, ctx: Ctx) {
 
   const challenge = await (await challengesCol()).findOne(
     { id },
-    { projection: { _id: 0, sampleOutput: 1 } }
+    { projection: { _id: 0, sampleOutput: 1, patternPoints: 1 } }
   );
   if (!challenge) return NextResponse.json({ error: "Challenge not found." }, { status: 404 });
 
   const users = await usersCol();
-  const fresh = await users.findOne({ id: user.id }, { projection: { _id: 0, solved: 1, patterns: 1 } });
+  const fresh = await users.findOne(
+    { id: user.id },
+    { projection: { _id: 0, solved: 1, patterns: 1, teamId: 1 } }
+  );
   if (!fresh) return NextResponse.json({ error: "Account not found." }, { status: 401 });
 
   const alreadyVerified = (fresh.patterns ?? []).includes(id) || fresh.solved.includes(id);
   const matches = normalizeOutput(pattern) === normalizeOutput(challenge.sampleOutput);
 
-  if (matches) {
-    if (!alreadyVerified) await users.updateOne({ id: user.id }, { $addToSet: { patterns: id } });
-    return NextResponse.json({ verified: true });
+  if (!matches && !alreadyVerified) {
+    const line = firstDiffLine(pattern, challenge.sampleOutput);
+    return NextResponse.json({
+      verified: false,
+      error: `Pattern mismatch at line ${line}. Reread the problem statement and adjust your pattern.`,
+    });
   }
 
-  if (alreadyVerified) return NextResponse.json({ verified: true });
+  if (alreadyVerified) return NextResponse.json({ verified: true, earned: 0 });
 
-  const line = firstDiffLine(pattern, challenge.sampleOutput);
-  return NextResponse.json({
-    verified: false,
-    error: `Pattern mismatch at line ${line}. Reread the problem statement and adjust your pattern.`,
-  });
+  // First verified pattern — award the Stage 1 share of the points (once per team).
+  const reward = challenge.patternPoints ?? 0;
+  let earned = 0;
+  const team = fresh.teamId
+    ? await (await teamsCol()).findOne({ id: fresh.teamId }, { projection: { _id: 0 } })
+    : null;
+
+  if (team) {
+    const awarded = await (await teamsCol()).updateOne(
+      { id: team.id, patterns: { $ne: id } },
+      { $push: { patterns: id }, $inc: { score: reward } }
+    );
+    if (awarded.matchedCount > 0) {
+      earned = reward;
+      await users.updateOne(
+        { id: user.id, patterns: { $ne: id } },
+        { $push: { patterns: id }, $inc: { score: reward }, $set: { lastSeenAt: nowISO() } }
+      );
+    }
+  } else {
+    const awarded = await users.updateOne(
+      { id: user.id, patterns: { $ne: id } },
+      { $push: { patterns: id }, $inc: { score: reward }, $set: { lastSeenAt: nowISO() } }
+    );
+    if (awarded.matchedCount > 0) earned = reward;
+  }
+
+  if (earned > 0) {
+    broadcastLeaderboard();
+    broadcast({ type: "stats" });
+  }
+
+  return NextResponse.json({ verified: true, earned });
 }

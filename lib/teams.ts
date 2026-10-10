@@ -27,13 +27,17 @@ export async function getTeamMembers(team: Team): Promise<User[]> {
     .toArray();
 }
 
-async function pointsFor(challengeIds: string[]): Promise<number> {
-  const ids = [...new Set(challengeIds)];
+async function pointsFor(solvedIds: string[], patternIds: string[] = []): Promise<number> {
+  const solvedSet = new Set(solvedIds);
+  const ids = [...new Set([...solvedIds, ...patternIds])];
   if (!ids.length) return 0;
   const docs = await (await challengesCol())
-    .find({ id: { $in: ids } }, { projection: { points: 1 } })
+    .find({ id: { $in: ids } }, { projection: { points: 1, patternPoints: 1 } })
     .toArray();
-  return docs.reduce((sum, challenge) => sum + challenge.points, 0);
+  return docs.reduce(
+    (sum, challenge) => sum + (solvedSet.has(challenge.id) ? challenge.points : (challenge.patternPoints ?? 0)),
+    0
+  );
 }
 
 export async function createTeam(
@@ -63,10 +67,11 @@ export async function createTeam(
     leaderId: user.id,
     memberIds: [user.id],
     solved: [...new Set(user.solved)],
+    patterns: [...new Set(user.patterns ?? [])],
     score: 0,
     createdAt: nowISO(),
   };
-  team.score = await pointsFor(team.solved);
+  team.score = await pointsFor(team.solved, team.patterns);
 
   try {
     await (await teamsCol()).insertOne(team);
@@ -108,12 +113,13 @@ export async function addTeamMember(
   if (member.teamId) return { error: `${member.username} is already registered in a team.`, status: 409 };
 
   const solved = [...new Set([...team.solved, ...member.solved])];
-  const score = await pointsFor(solved);
+  const patterns = [...new Set([...(team.patterns ?? []), ...(member.patterns ?? [])])];
+  const score = await pointsFor(solved, patterns);
   const memberIds = [...team.memberIds, member.id];
 
   await teams.updateOne(
     { id: team.id },
-    { $set: { solved, score, memberIds } }
+    { $set: { solved, patterns, score, memberIds } }
   );
   await users.updateOne({ id: member.id }, { $set: { teamId: team.id } });
 

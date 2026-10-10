@@ -51,6 +51,7 @@ export async function POST(req: NextRequest) {
 
   const result = await judgeCode(language, code, challenge.sampleOutput);
 
+  const codeReward = challenge.codePoints ?? challenge.points;
   let earned = 0;
 
   if (result.status === "passed") {
@@ -58,15 +59,15 @@ export async function POST(req: NextRequest) {
       // Points are awarded once per team — no duplicate scores across members.
       const awarded = await teams.updateOne(
         { id: team.id, solved: { $ne: challenge.id } },
-        { $push: { solved: challenge.id }, $inc: { score: challenge.points } }
+        { $push: { solved: challenge.id }, $inc: { score: codeReward } }
       );
       if (awarded.matchedCount > 0) {
-        earned = challenge.points;
+        earned = codeReward;
         await users.updateOne(
           { id: user.id, solved: { $ne: challenge.id } },
           {
             $push: { solved: challenge.id },
-            $inc: { score: challenge.points },
+            $inc: { score: codeReward },
             $set: { lastSeenAt: nowISO() },
           }
         );
@@ -76,11 +77,11 @@ export async function POST(req: NextRequest) {
         { id: user.id, solved: { $ne: challenge.id } },
         {
           $push: { solved: challenge.id },
-          $inc: { score: challenge.points },
+          $inc: { score: codeReward },
           $set: { lastSeenAt: nowISO() },
         }
       );
-      if (awarded.matchedCount > 0) earned = challenge.points;
+      if (awarded.matchedCount > 0) earned = codeReward;
     }
   }
 

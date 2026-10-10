@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { CI, NO_ID, isDuplicateKey, nowISO, toPublicUser, usersCol } from "@/lib/db";
-import { attachSessionCookie, createSession } from "@/lib/auth";
 import { hashPassword } from "@/lib/password";
 import { broadcast } from "@/lib/events";
 import { broadcastLeaderboard } from "@/lib/leaderboard";
@@ -66,11 +65,9 @@ export async function POST(req: NextRequest) {
     throw error;
   }
 
-  const token = await createSession(user.id);
-  await attachSessionCookie(token);
-
   broadcast({ type: "users" });
   broadcastLeaderboard();
 
+  // No session is issued on registration — the player must sign in explicitly.
   return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
 }

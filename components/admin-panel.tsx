@@ -112,7 +112,8 @@ interface ChallengeForm {
   title: string;
   category: Category;
   difficulty: Difficulty;
-  points: string;
+  patternPoints: string;
+  codePoints: string;
   desc: string;
   sampleOutput: string;
 }
@@ -122,7 +123,8 @@ const EMPTY_FORM: ChallengeForm = {
   title: "",
   category: "",
   difficulty: "Easy",
-  points: "150",
+  patternPoints: "50",
+  codePoints: "100",
   desc: "",
   sampleOutput: "",
 };
@@ -341,7 +343,8 @@ export default function AdminPanel() {
       title: challenge.title,
       category: challenge.category,
       difficulty: challenge.difficulty,
-      points: String(challenge.points),
+      patternPoints: String(challenge.patternPoints ?? 0),
+      codePoints: String(challenge.codePoints ?? challenge.points),
       desc: challenge.desc,
       sampleOutput: challenge.sampleOutput,
     });
@@ -356,7 +359,8 @@ export default function AdminPanel() {
         title: form.title,
         category: form.category,
         difficulty: form.difficulty,
-        points: Number(form.points),
+        patternPoints: Number(form.patternPoints),
+        codePoints: Number(form.codePoints),
         desc: form.desc,
         sampleOutput: form.sampleOutput,
       };
@@ -978,17 +982,38 @@ export default function AdminPanel() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-mono text-xs text-cyan-400 mb-1">Points</label>
+                  <label className="block font-mono text-xs text-cyan-400 mb-1">
+                    Stage 1 · Pattern Points (correct pattern)
+                  </label>
                   <input
                     type="number"
                     required
-                    min={10}
+                    min={0}
                     max={10000}
-                    value={form.points}
-                    onChange={(e) => setForm({ ...form, points: e.target.value })}
+                    value={form.patternPoints}
+                    onChange={(e) => setForm({ ...form, patternPoints: e.target.value })}
+                    placeholder="50"
                     className="w-full bg-brand-navy border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400"
                   />
                 </div>
+                <div>
+                  <label className="block font-mono text-xs text-cyan-400 mb-1">
+                    Stage 2 · Code Points (correct code)
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={0}
+                    max={10000}
+                    value={form.codePoints}
+                    onChange={(e) => setForm({ ...form, codePoints: e.target.value })}
+                    placeholder="100"
+                    className="w-full bg-brand-navy border border-cyan-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <div>
                   <label className="block font-mono text-xs text-cyan-400 mb-1">Difficulty</label>
                   <select
@@ -1000,6 +1025,9 @@ export default function AdminPanel() {
                     <option value="Medium">Medium</option>
                     <option value="Hard">Hard</option>
                   </select>
+                </div>
+                <div className="font-mono text-xs text-cyan-300 pb-2">
+                  Total reward: {Number(form.patternPoints || 0) + Number(form.codePoints || 0)} PTS
                 </div>
               </div>
 

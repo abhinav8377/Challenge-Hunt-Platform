@@ -16,14 +16,17 @@ export default async function LoginPage(props: { searchParams: Promise<Record<st
   if (user) redirect(next);
 
   const loggedOut = searchParams.loggedOut === "1";
+  const registered = searchParams.registered === "1";
+
+  const notice = registered
+    ? "Account created. Sign in with your handle/email and password to enter the arena."
+    : loggedOut
+      ? "Signed out successfully. Authentication required to re-enter the arena."
+      : undefined;
 
   return (
     <main className="w-full max-w-7xl mx-auto px-4 lg:px-8 py-8">
-      <AuthForm
-        mode="login"
-        next={next}
-        notice={loggedOut ? "Signed out successfully. Authentication required to re-enter the arena." : undefined}
-      />
+      <AuthForm mode="login" next={next} notice={notice} />
     </main>
   );
 }
