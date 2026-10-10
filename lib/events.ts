@@ -4,7 +4,8 @@ type PlatformEvent =
   | { type: "submissions" }
   | { type: "users" }
   | { type: "stats" }
-  | { type: "settings" };
+  | { type: "settings" }
+  | { type: "warning"; username: string; teamName: string | null; violations: number; banned: boolean };
 
 type Handler = (event: PlatformEvent) => void;
 

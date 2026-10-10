@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   LANGUAGES,
   LANGUAGE_LABELS,
+  challengeCode,
   type Challenge,
   type JudgeResult,
   type Language,
@@ -521,9 +522,14 @@ export default function ChallengesView({
                 )}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <span className="px-2.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs">
-                      {challenge.category}
-                    </span>
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="px-2.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 font-mono text-xs shrink-0">
+                        #{challengeCode(challenge.number)}
+                      </span>
+                      <span className="px-2.5 py-0.5 rounded bg-white/5 border border-white/10 text-gray-300 font-mono text-xs truncate">
+                        {challenge.category}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-2">
                       <span
                         className={`px-2.5 py-0.5 rounded border font-mono text-xs ${DIFF_STYLES[challenge.difficulty]}`}
@@ -594,6 +600,9 @@ export default function ChallengesView({
           <div className="glass-panel w-full max-w-6xl h-[92vh] rounded-2xl border border-cyan-500/40 flex flex-col overflow-hidden relative tech-border animate-[slideUp_0.35s_cubic-bezier(0.16,1,0.3,1)]">
             <div className="px-4 sm:px-6 py-4 border-b border-cyan-500/20 flex items-center justify-between bg-brand-navy/80 gap-3">
               <div className="flex items-center gap-3 flex-wrap min-w-0">
+                <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/50 text-cyan-200 text-xs font-mono shrink-0">
+                  #{challengeCode(active.number)}
+                </span>
                 <span className="px-2.5 py-0.5 rounded bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 text-xs font-mono shrink-0">
                   {active.category}
                 </span>

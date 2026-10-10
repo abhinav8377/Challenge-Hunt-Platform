@@ -52,8 +52,17 @@ export async function POST(req: NextRequest) {
   const parsed = validateChallengeInput(body);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
+  const challenges = await challengesCol();
+  const latest = await challenges
+    .find({}, { projection: { number: 1 } })
+    .sort({ number: -1 })
+    .limit(1)
+    .next();
+  const nextNumber = typeof latest?.number === "number" ? latest.number + 1 : 1;
+
   const challenge: Challenge = {
     id: `c-${randomUUID()}`,
+    number: nextNumber,
     title: parsed.value.title,
     category: parsed.value.category,
     difficulty: parsed.value.difficulty,
@@ -66,7 +75,7 @@ export async function POST(req: NextRequest) {
     createdAt: nowISO(),
   };
 
-  await (await challengesCol()).insertOne(challenge);
+  await challenges.insertOne(challenge);
 
   broadcast({ type: "challenges" });
   broadcast({ type: "stats" });

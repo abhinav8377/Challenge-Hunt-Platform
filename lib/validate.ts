@@ -1,6 +1,6 @@
 import { DIFFICULTIES, LANGUAGES, type Challenge, type Difficulty, type Language } from "./types";
 
-export type ChallengeInput = Omit<Challenge, "id" | "codeTemplates" | "createdAt"> & {
+export type ChallengeInput = Omit<Challenge, "id" | "number" | "codeTemplates" | "createdAt"> & {
   codeTemplates?: Partial<Record<Language, string>>;
 };
 

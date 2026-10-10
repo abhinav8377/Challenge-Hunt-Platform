@@ -1,9 +1,23 @@
 import { NextResponse } from "next/server";
 import { getSessionUserRecord } from "@/lib/auth";
-import { nowISO, sessionsCol, usersCol } from "@/lib/db";
+import { nowISO, sessionsCol, teamsCol, usersCol } from "@/lib/db";
 import { broadcast } from "@/lib/events";
+import { broadcastLeaderboard } from "@/lib/leaderboard";
 
 const MAX_ATTEMPTS = 2;
+
+async function announceWarning(username: string, teamId: string | undefined, violations: number, banned: boolean) {
+  let teamName: string | null = null;
+  if (teamId) {
+    const team = await (await teamsCol()).findOne({ id: teamId }, { projection: { _id: 0, name: 1 } });
+    teamName = team?.name ?? null;
+  }
+
+  broadcast({ type: "warning", username, teamName, violations, banned });
+  broadcast({ type: "users" });
+  broadcastLeaderboard();
+  broadcast({ type: "stats" });
+}
 
 export async function POST() {
   const user = await getSessionUserRecord();
@@ -21,7 +35,10 @@ export async function POST() {
   const fresh = await users.findOneAndUpdate(
     { id: user.id },
     { $inc: { tabViolations: 1 } },
-    { returnDocument: "after", projection: { id: 1, role: 1, tabViolations: 1 } }
+    {
+      returnDocument: "after",
+      projection: { id: 1, role: 1, username: 1, teamId: 1, tabViolations: 1 },
+    }
   );
 
   if (!fresh) return NextResponse.json({ error: "User not found." }, { status: 404 });
@@ -39,13 +56,14 @@ export async function POST() {
     );
     await (await sessionsCol()).deleteMany({ userId: user.id });
 
-    broadcast({ type: "users" });
-    broadcast({ type: "stats" });
+    await announceWarning(fresh.username, fresh.teamId, violations, true);
     return NextResponse.json(
       { banned: true, violations, message: "You are Banned" },
       { status: 403 }
     );
   }
+
+  await announceWarning(fresh.username, fresh.teamId, violations, false);
 
   return NextResponse.json({
     banned: false,

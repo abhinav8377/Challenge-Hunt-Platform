@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CATEGORIES, LANGUAGES, LANGUAGE_LABELS, type Category, type Challenge, type Difficulty, type Language } from "@/lib/types";
+import { CATEGORIES, LANGUAGES, LANGUAGE_LABELS, challengeCode, type Category, type Challenge, type Difficulty, type Language } from "@/lib/types";
 import ChallengesView from "./challenges-view";
 import LeaderboardPage from "./leaderboard/leaderboard-page";
 import AdminTimerSettings from "./admin-timer-settings";
@@ -28,6 +28,7 @@ interface OverviewUser {
   solves: number;
   bot: boolean;
   banned: boolean;
+  warnings: number;
   createdAt: string;
   lastSeenAt: string;
 }
@@ -48,8 +49,19 @@ interface LeaderboardEntry {
   teamName: string;
   score: number;
   solves: number;
+  solvedIds: string[];
+  warnings: number;
   status: string;
   isSelf: boolean;
+}
+
+interface AlertItem {
+  id: number;
+  username: string;
+  teamName: string | null;
+  violations: number;
+  banned: boolean;
+  at: string;
 }
 
 interface Overview {
@@ -254,6 +266,7 @@ export default function AdminPanel() {
   const [loaded, setLoaded] = useState(false);
   const [challengeQuery, setChallengeQuery] = useState("");
   const [userQuery, setUserQuery] = useState("");
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -281,7 +294,30 @@ export default function AdminPanel() {
     source.onmessage = (event) => {
       try {
         const payload = JSON.parse(event.data);
-        if (["users", "leaderboard", "submissions", "stats", "challenges"].includes(payload.type)) refresh();
+        if (payload.type === "warning") {
+          const where = payload.teamName ? `${payload.username} (team ${payload.teamName})` : payload.username;
+          toast(
+            payload.banned
+              ? `BANNED: ${where} — ${payload.violations} anti-cheat violations`
+              : `Anti-cheat warning ${payload.violations}: ${where} tried to leave the challenge tab`,
+            "error",
+            8000
+          );
+          setAlerts((prev) =>
+            [
+              {
+                id: Date.now() + Math.random(),
+                username: payload.username,
+                teamName: payload.teamName ?? null,
+                violations: Number(payload.violations) || 0,
+                banned: Boolean(payload.banned),
+                at: new Date().toISOString(),
+              },
+              ...prev,
+            ].slice(0, 20)
+          );
+        }
+        if (["users", "leaderboard", "submissions", "stats", "challenges", "warning"].includes(payload.type)) refresh();
       } catch {
         // ignore malformed frames
       }
@@ -403,7 +439,7 @@ export default function AdminPanel() {
     }
   }
 
-  async function userAction(id: string, action: "reset" | "toggle-role" | "unban") {
+  async function userAction(id: string, action: "reset" | "toggle-role" | "unban" | "clear-warnings") {
     try {
       const res = await fetch(`/api/admin/users/${id}`, {
         method: "PATCH",
@@ -415,7 +451,15 @@ export default function AdminPanel() {
         toast(data.error ?? "Action failed", "error");
         return;
       }
-      toast(action === "reset" ? "Score reset" : action === "unban" ? "User unbanned" : "Role updated");
+      toast(
+        action === "reset"
+          ? "Score reset"
+          : action === "unban"
+            ? "User unbanned"
+            : action === "clear-warnings"
+              ? "Warnings cleared"
+              : "Role updated"
+      );
       refresh();
     } catch {
       toast("Network error", "error");
@@ -670,6 +714,7 @@ export default function AdminPanel() {
                   <table className="w-full text-left font-rajdhani">
                     <thead className="bg-brand-navy/90 text-cyan-400 text-[11px] font-orbitron uppercase border-b border-cyan-500/15">
                       <tr>
+                        <th className="py-3 px-4 sm:px-5 w-24">ID</th>
                         <th className="py-3 px-4 sm:px-5">Challenge</th>
                         <th className="py-3 px-4 sm:px-5 w-32">Category</th>
                         <th className="py-3 px-4 sm:px-5 w-28">Difficulty</th>
@@ -681,6 +726,9 @@ export default function AdminPanel() {
                     <tbody className="divide-y divide-cyan-500/10 text-sm text-gray-300">
                       {filteredChallenges.map((challenge) => (
                         <tr key={challenge.id} className="hover:bg-cyan-500/[0.06] transition-colors group">
+                          <td className="py-4 px-4 sm:px-5 font-mono text-cyan-300 text-xs">
+                            #{challengeCode(challenge.number)}
+                          </td>
                           <td className="py-4 px-4 sm:px-5 font-bold text-white truncate">{challenge.title}</td>
                           <td className="py-4 px-4 sm:px-5 text-cyan-300/80">
                             <span className="inline-flex px-2 py-0.5 rounded-md border border-cyan-500/25 bg-cyan-500/10 text-[11px] font-mono">
@@ -723,41 +771,101 @@ export default function AdminPanel() {
           )}
 
           {tab === "monitor" && (
-            <Panel
-              title="Live Monitor"
-              icon="fa-solid fa-tower-broadcast"
-              caption="Team standings streaming over SSE"
-              right={<LivePill label="Live" />}
-            >
-              {overview.leaderboard.length === 0 ? (
-                <EmptyState icon="fa-solid fa-ranking-star" message="No teams on the board yet." />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left font-rajdhani">
-                    <thead className="bg-brand-navy/90 text-cyan-400 text-[11px] font-orbitron uppercase border-b border-cyan-500/15">
-                      <tr>
-                        <th className="py-3 px-4 sm:px-5 w-20">Rank</th>
-                        <th className="py-3 px-4 sm:px-5">Team</th>
-                        <th className="py-3 px-4 sm:px-5 w-24 text-center">Solves</th>
-                        <th className="py-3 px-4 sm:px-5 w-32 text-center">Status</th>
-                        <th className="py-3 px-4 sm:px-5 w-32 text-right">Score</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-cyan-500/10 text-sm text-gray-300">
-                      {overview.leaderboard.map((entry) => (
-                        <tr
-                          key={`${entry.rank}-${entry.teamName}`}
-                          className={`hover:bg-cyan-500/[0.06] transition-colors ${entry.isSelf ? "bg-cyan-500/[0.04]" : ""}`}
-                        >
-                          <td className="py-4 px-4 sm:px-5">
-                            <span
-                              className={`font-orbitron font-extrabold text-lg ${RANK_STYLES[entry.rank] ?? "text-gray-400"}`}
-                            >
-                              #{entry.rank}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 sm:px-5 font-bold text-white truncate">{entry.teamName}</td>
-                          <td className="py-4 px-4 sm:px-5 text-center font-mono text-cyan-300">{entry.solves}</td>
+            <>
+              <Panel
+                title="Anti-Cheat Alerts"
+                icon="fa-solid fa-triangle-exclamation"
+                caption="Tab-switch and violation popups streamed live"
+                right={<LivePill label="Live" />}
+              >
+                {alerts.length === 0 ? (
+                  <EmptyState icon="fa-solid fa-shield-halved" message="No violations yet — the arena is clean." />
+                ) : (
+                  <ul className="divide-y divide-amber-500/10 text-sm">
+                    {alerts.map((alert) => (
+                      <li
+                        key={alert.id}
+                        className="px-5 sm:px-6 py-3 flex flex-wrap items-center gap-3 bg-amber-500/[0.04]"
+                      >
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/30 text-amber-300 font-mono text-[11px]">
+                          <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+                          {alert.banned ? "BAN" : `WARN ${alert.violations}`}
+                        </span>
+                        <span className="font-rajdhani font-bold text-white">{alert.username}</span>
+                        {alert.teamName && (
+                          <span className="font-mono text-xs text-cyan-300">team {alert.teamName}</span>
+                        )}
+                        <span className="font-mono text-[11px] text-gray-500 ml-auto">
+                          {new Date(alert.at).toLocaleTimeString()}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+              <Panel
+                title="Live Monitor"
+                icon="fa-solid fa-tower-broadcast"
+                caption="Team standings streaming over SSE"
+                right={<LivePill label="Live" />}
+              >
+                {overview.leaderboard.length === 0 ? (
+                  <EmptyState icon="fa-solid fa-ranking-star" message="No teams on the board yet." />
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left font-rajdhani">
+                      <thead className="bg-brand-navy/90 text-cyan-400 text-[11px] font-orbitron uppercase border-b border-cyan-500/15">
+                        <tr>
+                          <th className="py-3 px-4 sm:px-5 w-20">Rank</th>
+                          <th className="py-3 px-4 sm:px-5">Team</th>
+                          <th className="py-3 px-4 sm:px-5">Solved IDs</th>
+                          <th className="py-3 px-4 sm:px-5 w-24 text-center">Solves</th>
+                          <th className="py-3 px-4 sm:px-5 w-24 text-center">Warns</th>
+                          <th className="py-3 px-4 sm:px-5 w-32 text-center">Status</th>
+                          <th className="py-3 px-4 sm:px-5 w-32 text-right">Score</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-cyan-500/10 text-sm text-gray-300">
+                        {overview.leaderboard.map((entry) => (
+                          <tr
+                            key={`${entry.rank}-${entry.teamName}`}
+                            className={`hover:bg-cyan-500/[0.06] transition-colors ${entry.isSelf ? "bg-cyan-500/[0.04]" : ""}`}
+                          >
+                            <td className="py-4 px-4 sm:px-5">
+                              <span
+                                className={`font-orbitron font-extrabold text-lg ${RANK_STYLES[entry.rank] ?? "text-gray-400"}`}
+                              >
+                                #{entry.rank}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4 sm:px-5 font-bold text-white truncate">{entry.teamName}</td>
+                            <td className="py-4 px-4 sm:px-5">
+                              {entry.solvedIds?.length ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {entry.solvedIds.map((code) => (
+                                    <span
+                                      key={code}
+                                      className="px-1.5 py-0.5 rounded border border-cyan-500/25 bg-cyan-500/10 text-cyan-300 font-mono text-[11px] leading-none"
+                                    >
+                                      {code}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span className="font-mono text-xs text-gray-600">—</span>
+                              )}
+                            </td>
+                            <td className="py-4 px-4 sm:px-5 text-center font-mono text-cyan-300">{entry.solves}</td>
+                            <td className="py-4 px-4 sm:px-5 text-center">
+                              {entry.warnings > 0 ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/30 text-amber-300 font-mono text-[11px]">
+                                  <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+                                  {entry.warnings}
+                                </span>
+                              ) : (
+                                <span className="font-mono text-xs text-gray-600">—</span>
+                              )}
+                            </td>
                           <td className="py-4 px-4 sm:px-5 text-center">
                             <span
                               className={`inline-flex px-2.5 py-0.5 rounded-full border font-mono text-[11px] ${
@@ -779,6 +887,7 @@ export default function AdminPanel() {
                 </div>
               )}
             </Panel>
+            </>
           )}
 
           {tab === "timer" && (
@@ -871,15 +980,26 @@ export default function AdminPanel() {
                             {user.solves}
                           </td>
                           <td className="py-4 px-4 sm:px-5">
-                            {user.banned ? (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border bg-rose-500/10 border-rose-500/30 text-rose-300 font-mono text-[11px]">
-                                <span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> banned
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 font-mono text-[11px]">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> active
-                              </span>
-                            )}
+                            <div className="flex flex-col items-start gap-1.5">
+                              {user.banned ? (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border bg-rose-500/10 border-rose-500/30 text-rose-300 font-mono text-[11px]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-rose-400" /> banned
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/30 text-emerald-300 font-mono text-[11px]">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" /> active
+                                </span>
+                              )}
+                              {user.warnings > 0 && (
+                                <span
+                                  title={`${user.warnings} anti-cheat warning${user.warnings === 1 ? "" : "s"}`}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/30 text-amber-300 font-mono text-[11px]"
+                                >
+                                  <i className="fa-solid fa-triangle-exclamation" aria-hidden="true" />
+                                  {user.warnings} warn{user.warnings === 1 ? "" : "s"}
+                                </span>
+                              )}
+                            </div>
                           </td>
                           <td className="py-4 px-4 sm:px-5">
                             <div className="flex items-center justify-end rounded-lg border border-white/10 bg-white/[0.02] divide-x divide-white/5 w-max ml-auto">
@@ -901,6 +1021,14 @@ export default function AdminPanel() {
                                   label="Unban user"
                                   tone="success"
                                   onClick={() => userAction(user.id, "unban")}
+                                />
+                              )}
+                              {user.warnings > 0 && (
+                                <IconAction
+                                  icon="fa-solid fa-eye-slash"
+                                  label="Clear warnings"
+                                  tone="warn"
+                                  onClick={() => userAction(user.id, "clear-warnings")}
                                 />
                               )}
                               <IconAction

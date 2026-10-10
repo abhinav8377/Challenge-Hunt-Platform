@@ -54,8 +54,13 @@ export interface PublicUser {
   lastSeenAt: string;
 }
 
+export function challengeCode(number: number): string {
+  return String(number).padStart(3, "0");
+}
+
 export interface Challenge {
   id: string;
+  number: number;
   title: string;
   category: Category;
   difficulty: Difficulty;
@@ -105,6 +110,8 @@ export interface LeaderboardRow {
   members: string[];
   score: number;
   solves: number;
+  solvedIds: string[];
+  warnings: number;
   status: "Online" | "Offline";
   isSelf: boolean;
   lastSeenAt: string;

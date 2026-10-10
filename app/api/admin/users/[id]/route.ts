@@ -60,6 +60,20 @@ export async function PATCH(req: NextRequest, ctx: Ctx) {
       return NextResponse.json({ error: "User not found." }, { status: 404 });
     }
     broadcast({ type: "users" });
+    broadcastLeaderboard();
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "clear-warnings") {
+    const result = await users.updateOne(
+      { id },
+      { $set: { tabViolations: 0 } }
+    );
+    if (result.matchedCount === 0) {
+      return NextResponse.json({ error: "User not found." }, { status: 404 });
+    }
+    broadcast({ type: "users" });
+    broadcastLeaderboard();
     return NextResponse.json({ ok: true });
   }
 

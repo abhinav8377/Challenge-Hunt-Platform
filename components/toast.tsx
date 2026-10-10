@@ -18,14 +18,14 @@ function emit() {
   listeners.forEach((l) => l());
 }
 
-export function toast(message: string, kind: ToastKind = "success") {
+export function toast(message: string, kind: ToastKind = "success", durationMs = 3500) {
   const id = ++seq;
   toasts = [...toasts, { id, message, kind }];
   emit();
   setTimeout(() => {
     toasts = toasts.filter((t) => t.id !== id);
     emit();
-  }, 3500);
+  }, durationMs);
 }
 
 function subscribe(listener: () => void) {

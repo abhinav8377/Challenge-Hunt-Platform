@@ -86,7 +86,7 @@ export default function LeaderboardTable({
       />
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left min-w-[840px] border-collapse">
+        <table className="w-full text-left min-w-[1080px] border-collapse">
           <thead className="bg-[#0d1b2d] border-b border-white/10 text-cyan-400">
             <tr>
               <SortTh label="Rank" column="rank" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
@@ -95,6 +95,12 @@ export default function LeaderboardTable({
               </th>
               <SortTh label="Score" column="score" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
               <SortTh label="Last Activity" column="activity" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              <th
+                scope="col"
+                className="py-3 px-4 sm:px-5 uppercase tracking-wider text-[11px] font-bold min-w-[10rem]"
+              >
+                Solved IDs
+              </th>
               <SortTh
                 label="Total Completed"
                 column="completed"
@@ -103,6 +109,12 @@ export default function LeaderboardTable({
                 onSort={onSort}
                 align="right"
               />
+              <th
+                scope="col"
+                className="py-3 px-4 sm:px-5 text-center uppercase tracking-wider text-[11px] font-bold"
+              >
+                Warnings
+              </th>
               <th
                 scope="col"
                 className="py-3 px-4 sm:px-5 text-center uppercase tracking-wider text-[11px] font-bold"
@@ -120,7 +132,7 @@ export default function LeaderboardTable({
           <tbody className="divide-y divide-white/[0.06] font-rajdhani text-sm">
             {!loaded && (
               <tr>
-                <td colSpan={7} className="py-10 text-center font-mono text-sm text-slate-500">
+                <td colSpan={9} className="py-10 text-center font-mono text-sm text-slate-500">
                   <i className="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true" />
                   Syncing live standings...
                 </td>
@@ -128,7 +140,7 @@ export default function LeaderboardTable({
             )}
             {loaded && rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-10 text-center font-mono text-sm text-slate-500">
+                <td colSpan={9} className="py-10 text-center font-mono text-sm text-slate-500">
                   {search ? (
                     <>
                       No teams match &quot;{search}&quot;.

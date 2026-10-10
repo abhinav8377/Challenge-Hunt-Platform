@@ -78,6 +78,7 @@ export async function GET() {
       solves: u.solved.length,
       bot: Boolean(u.bot),
       banned: Boolean(u.banned),
+      warnings: typeof u.tabViolations === "number" ? u.tabViolations : 0,
       createdAt: u.createdAt,
       lastSeenAt: u.lastSeenAt,
     })),

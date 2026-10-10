@@ -66,6 +66,7 @@ async function initialize(db: Db): Promise<void> {
     users.createIndex({ score: -1 }),
     users.createIndex({ teamId: 1 }),
     challenges.createIndex({ id: 1 }, { unique: true }),
+    challenges.createIndex({ number: 1 }, { unique: true, sparse: true }),
     challenges.createIndex({ createdAt: 1, _id: 1 }),
     sessions.createIndex({ userId: 1 }),
     sessions.createIndex({ expiresAt: 1 }),
@@ -78,6 +79,29 @@ async function initialize(db: Db): Promise<void> {
   ]);
 
   await ensureAdmin(db);
+  await backfillChallengeNumbers(db);
+}
+
+async function backfillChallengeNumbers(db: Db): Promise<void> {
+  const challenges = db.collection<{ id: string; number?: number; createdAt: string }>("challenges");
+  const ordered = await challenges
+    .find({}, { projection: { _id: 1, number: 1 } })
+    .sort({ createdAt: 1, _id: 1 })
+    .toArray();
+
+  const used = new Set<number>();
+  for (const doc of ordered) {
+    if (typeof doc.number === "number") used.add(doc.number);
+  }
+  if (used.size === ordered.length) return;
+
+  let next = 1;
+  for (const doc of ordered) {
+    if (typeof doc.number === "number") continue;
+    while (used.has(next)) next += 1;
+    await challenges.updateOne({ _id: doc._id }, { $set: { number: next } });
+    used.add(next);
+  }
 }
 
 async function ensureAdmin(db: Db): Promise<void> {
